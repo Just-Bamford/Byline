@@ -5,6 +5,7 @@ interface WalletUIProps {
   balance: number;
   onTopUp: (amount: number) => Promise<void>;
   onInitialize: (email: string) => Promise<void>;
+  onLogout?: () => void;
   isInitialized: boolean;
 }
 
@@ -12,11 +13,26 @@ export function WalletUI({
   balance,
   onTopUp,
   onInitialize,
+  onLogout,
   isInitialized,
 }: WalletUIProps) {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [showWalletInfo, setShowWalletInfo] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string>("");
+
+  // Load wallet address from localStorage
+  useEffect(() => {
+    if (isInitialized) {
+      const savedSecret = localStorage.getItem("byline-wallet-secret");
+      if (savedSecret) {
+        // In production, derive address from secret
+        const addr = savedSecret.substring(0, 16) + "...";
+        setWalletAddress(addr);
+      }
+    }
+  }, [isInitialized]);
 
   const handleTopUp = async (amount: number) => {
     setLoading(true);
@@ -44,6 +60,14 @@ export function WalletUI({
     }
   };
 
+  const copyToClipboard = () => {
+    const savedSecret = localStorage.getItem("byline-wallet-secret");
+    if (savedSecret) {
+      navigator.clipboard.writeText(savedSecret);
+      alert("Wallet secret copied to clipboard");
+    }
+  };
+
   if (!isInitialized) {
     return (
       <div className="wallet-ui wallet-login">
@@ -58,20 +82,46 @@ export function WalletUI({
             disabled={loading}
           />
           <button type="submit" disabled={loading}>
-            {loading ? "Creating..." : "Create Wallet"}
+            {loading ? "Creating..." : "🔐 Create Wallet"}
           </button>
         </form>
-        {error && <p className="error">{error}</p>}
+        {error && <p className="error">❌ {error}</p>}
+        <p className="wallet-info">
+          Your wallet will be funded with testnet tokens automatically.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="wallet-ui">
-      <div className="balance-display">
-        <span className="label">Balance</span>
-        <span className="amount">${balance.toFixed(4)} XLM</span>
+    <div className="wallet-ui wallet-connected">
+      <div className="balance-container">
+        <div className="balance-display">
+          <span className="label">Balance</span>
+          <span className="amount">{balance.toFixed(4)} XLM</span>
+        </div>
+
+        <button
+          className="wallet-info-btn"
+          onClick={() => setShowWalletInfo(!showWalletInfo)}
+          title="Show wallet info"
+        >
+          ℹ️
+        </button>
       </div>
+
+      {showWalletInfo && (
+        <div className="wallet-info-panel">
+          <div className="info-item">
+            <span className="label">Wallet Address</span>
+            <span className="value">{walletAddress}</span>
+          </div>
+          <button className="btn btn-small" onClick={copyToClipboard}>
+            Copy Secret Key
+          </button>
+          <p className="warning">⚠️ Never share your secret key with anyone</p>
+        </div>
+      )}
 
       <div className="topup-buttons">
         <button
@@ -79,25 +129,31 @@ export function WalletUI({
           onClick={() => handleTopUp(10)}
           disabled={loading}
         >
-          {loading ? "Processing..." : "+ $10"}
+          {loading ? "..." : "+ 10 XLM"}
         </button>
         <button
           className="btn btn-topup"
           onClick={() => handleTopUp(50)}
           disabled={loading}
         >
-          {loading ? "Processing..." : "+ $50"}
+          {loading ? "..." : "+ 50 XLM"}
         </button>
         <button
           className="btn btn-topup"
           onClick={() => handleTopUp(100)}
           disabled={loading}
         >
-          {loading ? "Processing..." : "+ $100"}
+          {loading ? "..." : "+ 100 XLM"}
         </button>
       </div>
 
-      {error && <p className="error">{error}</p>}
+      {onLogout && (
+        <button className="btn btn-logout" onClick={onLogout}>
+          🚪 Logout
+        </button>
+      )}
+
+      {error && <p className="error">❌ {error}</p>}
     </div>
   );
 }
