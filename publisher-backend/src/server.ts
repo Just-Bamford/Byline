@@ -111,44 +111,72 @@ app.post("/record-read", async (req: Request, res: Response) => {
 
 /**
  * GET /earnings
- * Get publisher earnings
+ * Get publisher earnings summary
+ * Returns: { total, pending, settled, lastUpdated }
  */
-app.get("/earnings", async (req, res) => {
+app.get("/earnings", async (req: Request, res: Response) => {
   try {
     const earnings = await getEarnings();
-    res.json(earnings);
+    res.json({
+      ...earnings,
+      currency: "XLM",
+    });
   } catch (error) {
     console.error("Earnings error:", error);
-    res.status(500).json({ error: "Failed to fetch earnings" });
+    res.status(500).json({
+      error: "Failed to fetch earnings",
+      code: "EARNINGS_ERROR",
+    });
   }
 });
 
 /**
  * GET /articles/:articleId/stats
- * Get stats for a specific article
+ * Get revenue and read stats for a specific article
  */
-app.get("/articles/:articleId/stats", async (req, res) => {
+app.get("/articles/:articleId/stats", async (req: Request, res: Response) => {
   try {
     const { articleId } = req.params;
+
+    if (!articleId) {
+      return res.status(400).json({
+        error: "Article ID is required",
+        code: "MISSING_ARTICLE_ID",
+      });
+    }
+
     const stats = await getArticleStats(articleId);
-    res.json(stats);
+    res.json({
+      ...stats,
+      currency: "XLM",
+    });
   } catch (error) {
     console.error("Article stats error:", error);
-    res.status(500).json({ error: "Failed to fetch article stats" });
+    res.status(500).json({
+      error: "Failed to fetch article stats",
+      code: "STATS_ERROR",
+    });
   }
 });
 
 /**
  * GET /articles/stats
- * Get stats for all articles
+ * Get revenue stats for all articles
  */
-app.get("/articles/stats", async (req, res) => {
+app.get("/articles/stats", async (req: Request, res: Response) => {
   try {
     const stats = await getAllArticleStats();
-    res.json(stats);
+    res.json({
+      ...stats,
+      currency: "XLM",
+      timestamp: Date.now(),
+    });
   } catch (error) {
     console.error("All articles stats error:", error);
-    res.status(500).json({ error: "Failed to fetch article stats" });
+    res.status(500).json({
+      error: "Failed to fetch article stats",
+      code: "STATS_ERROR",
+    });
   }
 });
 
