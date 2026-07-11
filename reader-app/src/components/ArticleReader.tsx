@@ -75,6 +75,10 @@ export function ArticleReader({ wallet, contractId }: ArticleReaderProps) {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [readingStartTime, setReadingStartTime] = useState<number>(0);
+  const [purchaseStatus, setPurchaseStatus] = useState<string>("");
+  const [purchaseInProgress, setPurchaseInProgress] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Load purchased articles from localStorage on mount
   useEffect(() => {
@@ -239,10 +243,10 @@ export function ArticleReader({ wallet, contractId }: ArticleReaderProps) {
                 <button
                   className="btn btn-purchase"
                   onClick={() => handlePurchaseArticle(article)}
-                  disabled={loading}
+                  disabled={loading || purchaseInProgress.has(article.id)}
                 >
-                  {loading
-                    ? "Processing..."
+                  {purchaseInProgress.has(article.id)
+                    ? "⏳ Processing..."
                     : `🛒 Buy for ${article.price.toFixed(4)} XLM`}
                 </button>
               )}
@@ -261,6 +265,14 @@ export function ArticleReader({ wallet, contractId }: ArticleReaderProps) {
         <div className="error-message">
           <span>❌ {error}</span>
           <button onClick={() => setError(null)}>Dismiss</button>
+        </div>
+      )}
+
+      {purchaseStatus && (
+        <div
+          className={`purchase-status ${purchaseStatus.includes("✅") ? "success" : "error"}`}
+        >
+          <span>{purchaseStatus}</span>
         </div>
       )}
 
