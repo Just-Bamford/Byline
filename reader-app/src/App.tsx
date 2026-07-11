@@ -6,10 +6,24 @@ import "./App.css";
 
 const CONTRACT_ID = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
 
+interface NavItem {
+  label: string;
+  id: string;
+  icon: string;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { label: "Home", id: "home", icon: "🏠" },
+  { label: "Articles", id: "articles", icon: "📰" },
+  { label: "My Reads", id: "my-reads", icon: "📚" },
+  { label: "Settings", id: "settings", icon: "⚙️" },
+];
+
 function App() {
   const [wallet, setWallet] = useState<WalletManager | null>(null);
   const [balance, setBalance] = useState<number>(0);
   const [loading, setLoading] = useState(false);
+  const [activeNav, setActiveNav] = useState<string>("home");
 
   // Load wallet from localStorage on mount
   useEffect(() => {
@@ -64,6 +78,7 @@ function App() {
 
       setWallet(newWallet);
       await updateBalance(newWallet);
+      setActiveNav("articles");
     } catch (err) {
       console.error("Wallet initialization failed:", err);
       throw err;
@@ -89,6 +104,13 @@ function App() {
     }
   };
 
+  const handleLogout = () => {
+    setWallet(null);
+    setBalance(0);
+    setActiveNav("home");
+    localStorage.removeItem("byline-wallet-secret");
+  };
+
   return (
     <div className="app">
       <header className="app-header">
@@ -96,17 +118,56 @@ function App() {
           <h1>📰 Byline Reader</h1>
           <p className="tagline">Pay per article. Not per month.</p>
         </div>
+        {wallet && (
+          <nav className="header-nav">
+            {NAV_ITEMS.map((item) => (
+              <button
+                key={item.id}
+                className={`nav-button ${activeNav === item.id ? "active" : ""}`}
+                onClick={() => setActiveNav(item.id)}
+              >
+                <span className="nav-icon">{item.icon}</span>
+                <span className="nav-label">{item.label}</span>
+              </button>
+            ))}
+          </nav>
+        )}
         <WalletUI
           balance={balance}
           onTopUp={topUpWallet}
           onInitialize={initializeWallet}
+          onLogout={handleLogout}
           isInitialized={wallet !== null}
         />
       </header>
 
       <main className="app-main">
         {wallet ? (
-          <ArticleReader wallet={wallet} contractId={CONTRACT_ID} />
+          <>
+            {activeNav === "home" && (
+              <div className="home-section">
+                <h2>Welcome back!</h2>
+                <p>Start reading quality journalism today.</p>
+              </div>
+            )}
+            {activeNav === "articles" && (
+              <ArticleReader wallet={wallet} contractId={CONTRACT_ID} />
+            )}
+            {activeNav === "my-reads" && (
+              <div className="my-reads-section">
+                <h2>My Reads</h2>
+                <p>Articles you've read with Byline</p>
+              </div>
+            )}
+            {activeNav === "settings" && (
+              <div className="settings-section">
+                <h2>Settings</h2>
+                <button className="logout-button" onClick={handleLogout}>
+                  Logout
+                </button>
+              </div>
+            )}
+          </>
         ) : (
           <div className="login-prompt">
             <div className="prompt-content">
