@@ -31,6 +31,30 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// Middleware: Request validation
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (
+    req.method === "POST" &&
+    !req.get("Content-Type")?.includes("application/json")
+  ) {
+    return res.status(400).json({
+      error: "Content-Type must be application/json",
+      code: "INVALID_CONTENT_TYPE",
+    });
+  }
+  next();
+});
+
+// Middleware: Global error handler
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({
+    error: "Internal server error",
+    code: "SERVER_ERROR",
+    message: NODE_ENV === "development" ? err.message : undefined,
+  });
+});
+
 // Clear expired tokens every 5 minutes
 setInterval(clearExpiredTokens, 5 * 60 * 1000);
 
