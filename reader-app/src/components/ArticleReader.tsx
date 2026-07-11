@@ -103,6 +103,16 @@ export function ArticleReader({ wallet, contractId }: ArticleReaderProps) {
       const publisherAddress =
         "GBUQWP3BOUZX34ULNQG23RQ6F4BFSRJSU6DCFTL7NNLGYAGXUCESA5ON";
 
+      // Show purchase confirmation
+      const confirmed = window.confirm(
+        `Purchase "${article.title}" for ${article.price.toFixed(4)} XLM?`,
+      );
+      if (!confirmed) {
+        setLoading(false);
+        return;
+      }
+
+      // Execute purchase
       const token = await wallet.purchaseArticle(
         contractId,
         article.id,
@@ -110,10 +120,15 @@ export function ArticleReader({ wallet, contractId }: ArticleReaderProps) {
         publisherAddress,
       );
 
+      // Mark article as purchased
       setPurchasedArticles((prev) => new Set(prev).add(article.id));
       setSelectedArticle(article);
 
+      // Store token in localStorage for verification
       localStorage.setItem(`token-${article.id}`, JSON.stringify(token));
+
+      // Show success message
+      console.log(`✅ Purchase successful for ${article.id}`);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to purchase article",
