@@ -21,6 +21,10 @@ export function WalletUI({
   const [error, setError] = useState<string | null>(null);
   const [showWalletInfo, setShowWalletInfo] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string>("");
+  const [topUpStatus, setTopUpStatus] = useState<string>("");
+  const [transactions, setTransactions] = useState<
+    Array<{ type: string; amount: number; timestamp: number }>
+  >([]);
 
   // Load wallet address from localStorage
   useEffect(() => {
@@ -37,10 +41,19 @@ export function WalletUI({
   const handleTopUp = async (amount: number) => {
     setLoading(true);
     setError(null);
+    setTopUpStatus(`Adding ${amount} XLM...`);
     try {
       await onTopUp(amount);
+      setTopUpStatus(`✅ Added ${amount} XLM to your account`);
+      setTransactions((prev) => [
+        ...prev,
+        { type: "topup", amount, timestamp: Date.now() },
+      ]);
+      setTimeout(() => setTopUpStatus(""), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Top-up failed");
+      setTopUpStatus(`❌ Top-up failed`);
+      setTimeout(() => setTopUpStatus(""), 3000);
     } finally {
       setLoading(false);
     }
@@ -120,6 +133,28 @@ export function WalletUI({
             Copy Secret Key
           </button>
           <p className="warning">⚠️ Never share your secret key with anyone</p>
+
+          {transactions.length > 0 && (
+            <div className="transaction-history">
+              <h4>Recent Transactions</h4>
+              <ul>
+                {transactions
+                  .slice(-5)
+                  .reverse()
+                  .map((tx, idx) => (
+                    <li key={idx}>
+                      <span className="tx-type">
+                        {tx.type === "topup" ? "➕" : "➖"}
+                      </span>
+                      <span className="tx-amount">{tx.amount} XLM</span>
+                      <span className="tx-time">
+                        {new Date(tx.timestamp).toLocaleDateString()}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 
