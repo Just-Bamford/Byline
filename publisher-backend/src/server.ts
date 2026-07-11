@@ -71,23 +71,41 @@ app.post("/verify", async (req: Request, res: Response) => {
 /**
  * POST /record-read
  * Record a successful article read for analytics
+ * Body: { articleId, readerId, price, duration? }
+ * Returns: { success: boolean, recordedAt: number }
  */
-app.post("/record-read", async (req, res) => {
+app.post("/record-read", async (req: Request, res: Response) => {
   try {
-    const { articleId, readerId, price } = req.body;
+    const { articleId, readerId, price, duration } = req.body;
 
     if (!articleId || !readerId || price === undefined) {
-      return res
-        .status(400)
-        .json({ error: "Missing articleId, readerId, or price" });
+      return res.status(400).json({
+        error: "Missing articleId, readerId, or price",
+        code: "INVALID_REQUEST",
+      });
+    }
+
+    if (price < 0) {
+      return res.status(400).json({
+        error: "Price cannot be negative",
+        code: "INVALID_PRICE",
+      });
     }
 
     await recordRead(articleId, readerId, price);
 
-    res.json({ success: true });
+    res.json({
+      success: true,
+      recordedAt: Date.now(),
+      articleId,
+      readerId,
+    });
   } catch (error) {
     console.error("Record read error:", error);
-    res.status(500).json({ error: "Failed to record read" });
+    res.status(500).json({
+      error: "Failed to record read",
+      code: "RECORD_ERROR",
+    });
   }
 });
 
