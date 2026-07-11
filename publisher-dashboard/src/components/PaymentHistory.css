@@ -1,0 +1,263 @@
+.payment-history {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.history-header h2 {
+  font-size: 1.5rem;
+  color: #1f2937;
+}
+
+.btn-secondary {
+  background: #6b7280;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+  background: #4b5563;
+}
+
+.payment-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.stat-card.pending {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.stat-card.failed {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+.stat-card .label {
+  display: block;
+  font-size: 0.85rem;
+  opacity: 0.9;
+  margin-bottom: 0.5rem;
+}
+
+.stat-card .value {
+  display: block;
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.stat-card .count {
+  display: block;
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.controls-section {
+  display: flex;
+  gap: 2rem;
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.filters,
+.sort {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.filters label,
+.sort label {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.filters select,
+.sort select {
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.table-wrapper {
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  overflow-x: auto;
+}
+
+.payments-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.payments-table th {
+  background: #f3f4f6;
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: #1f2937;
+  border-bottom: 2px solid #e5e7eb;
+  font-size: 0.9rem;
+}
+
+.payments-table td {
+  padding: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  color: #6b7280;
+}
+
+.payments-table tr:hover {
+  background: #f9fafb;
+}
+
+.amount {
+  color: #667eea;
+  font-weight: 600;
+  font-family: "Courier New", monospace;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.badge.settled {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.badge.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge.failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.tx-id {
+  font-family: "Courier New", monospace;
+  font-size: 0.85rem;
+}
+
+.tx-id a {
+  color: #667eea;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.tx-id a:hover {
+  text-decoration: underline;
+}
+
+.tx-id span {
+  color: #6b7280;
+}
+
+.empty {
+  text-align: center;
+  color: #9ca3af;
+}
+
+.btn-small {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.btn-retry {
+  background: #fbbf24;
+  color: #78350f;
+}
+
+.btn-retry:hover {
+  background: #f59e0b;
+}
+
+.payment-info {
+  background: #f0f9ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 1.5rem;
+  color: #1e40af;
+}
+
+.payment-info h3 {
+  margin-bottom: 1rem;
+  color: #1e3a8a;
+}
+
+.payment-info ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.payment-info li {
+  padding-left: 1.5rem;
+  position: relative;
+}
+
+.payment-info li:before {
+  content: "ℹ️";
+  position: absolute;
+  left: 0;
+}
+
+@media (max-width: 768px) {
+  .controls-section {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .payments-table th,
+  .payments-table td {
+    padding: 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .payment-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .history-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+}
