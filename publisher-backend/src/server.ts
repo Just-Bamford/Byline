@@ -235,13 +235,42 @@ app.get("/top-articles", async (req, res) => {
 });
 
 /**
- * Health check
+ * GET /health
+ * Health check endpoint
+ * Returns: { status: 'ok', uptime: number, timestamp: string }
  */
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+app.get("/health", (req: Request, res: Response) => {
+  res.json({
+    status: "ok",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    environment: NODE_ENV,
+  });
 });
 
 app.listen(PORT, () => {
-  console.log(`Byline Publisher Backend running on port ${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`
+╔══════════════════════════════════════════╗
+║   Byline Publisher Backend                ║
+╚══════════════════════════════════════════╝
+
+Port:       ${PORT}
+Environment: ${NODE_ENV}
+CORS:       ${process.env.CORS_ORIGIN || "*"}
+
+Endpoints:
+  POST   /verify              - Verify access token
+  POST   /record-read         - Record article read
+  GET    /earnings            - Get publisher earnings
+  GET    /articles/stats      - Get all article stats
+  GET    /articles/:id/stats  - Get article stats
+  GET    /readers/:id/stats   - Get reader stats
+  GET    /top-articles        - Get top articles
+  GET    /health              - Health check
+
+Health:     http://localhost:${PORT}/health
+Docs:       https://github.com/yourusername/byline/docs
+
+Ready to accept requests ✓
+  `);
 });
