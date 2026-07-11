@@ -67,6 +67,70 @@ export class BylinePublisher {
   }
 
   /**
+   * Get current configuration
+   */
+  getConfig(): Readonly<BylineConfig> {
+    return Object.freeze({ ...this.config });
+  }
+
+  /**
+   * Update configuration at runtime
+   */
+  updateConfig(updates: Partial<BylineConfig>): void {
+    const newConfig = { ...this.config, ...updates };
+    this.validateConfig(newConfig);
+    this.config = newConfig;
+  }
+
+  /**
+   * Clear token cache
+   */
+  clearCache(): void {
+    this.tokenCache.clear();
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats(): { size: number; entries: string[] } {
+    return {
+      size: this.tokenCache.size,
+      entries: Array.from(this.tokenCache.keys()),
+    };
+  }
+
+  /**
+   * Initialize SDK with default configuration
+   * Used for easy setup
+   */
+  static create(config: BylineConfig): BylinePublisher {
+    return new BylinePublisher(config);
+  }
+
+  /**
+   * Create SDK with environment variables
+   */
+  static fromEnv(): BylinePublisher {
+    const contractId = process.env.STELLAR_CONTRACT_ID;
+    const verificationServiceUrl = process.env.PUBLISHER_API_URL;
+    const publisherAddress = process.env.PUBLISHER_ADDRESS;
+    const apiKey = process.env.PUBLISHER_API_KEY;
+
+    if (!contractId || !verificationServiceUrl || !publisherAddress) {
+      throw new Error(
+        "Missing required environment variables: STELLAR_CONTRACT_ID, PUBLISHER_API_URL, PUBLISHER_ADDRESS",
+      );
+    }
+
+    return new BylinePublisher({
+      contractId,
+      verificationServiceUrl,
+      publisherAddress,
+      apiKey,
+    });
+  }
+
+  /**
    * Verify an access token from a reader
    * Returns true if valid, false otherwise
    */
