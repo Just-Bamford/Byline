@@ -62,6 +62,8 @@ const SAMPLE_ARTICLES: Article[] = [
   },
 ];
 
+const API_BASE_URL = process.env.VITE_API_URL || "http://localhost:3000";
+
 export function ArticleReader({ wallet, contractId }: ArticleReaderProps) {
   const [articles, setArticles] = useState<Article[]>(SAMPLE_ARTICLES);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
@@ -72,6 +74,7 @@ export function ArticleReader({ wallet, contractId }: ArticleReaderProps) {
   );
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [readingStartTime, setReadingStartTime] = useState<number>(0);
 
   // Load purchased articles from localStorage on mount
   useEffect(() => {
@@ -83,6 +86,38 @@ export function ArticleReader({ wallet, contractId }: ArticleReaderProps) {
     });
     setPurchasedArticles(purchased);
   }, []);
+
+  const recordReadToBackend = async (articleId: string, token: any) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/record-read`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          articleId,
+          readerId: wallet.getPublicKey(),
+          price: SAMPLE_ARTICLES.find((a) => a.id === articleId)?.price || 0,
+          token,
+        }),
+      });
+
+      if (!response.ok) {
+        console.warn("Failed to record read:", response.statusText);
+      }
+    } catch (err) {
+      console.warn("Backend connection error:", err);
+    }
+  };
+
+  const handleCloseArticle = async () => {
+    if (selectedArticle && readingStartTime > 0) {
+      const duration = Math.floor((Date.now() - readingStartTime) / 1000);
+      console.log(`Read duration: ${duration} seconds`);
+    }
+    setSelectedArticle(null);
+    setReadingStartTime(0);
+  };
 
   const filteredArticles = articles.filter((article) => {
     const matchesSearch = article.title
@@ -193,7 +228,10 @@ export function ArticleReader({ wallet, contractId }: ArticleReaderProps) {
               {canReadArticle(article.id) ? (
                 <button
                   className="btn btn-primary"
-                  onClick={() => setSelectedArticle(article)}
+                  onClick={() => {
+                    setSelectedArticle(article);
+                    setReadingStartTime(Date.now());
+                  }}
                 >
                   📖 Read Article
                 </button>
@@ -230,10 +268,7 @@ export function ArticleReader({ wallet, contractId }: ArticleReaderProps) {
         <div className="article-modal">
           <div className="modal-overlay"></div>
           <div className="article-content">
-            <button
-              className="btn btn-close"
-              onClick={() => setSelectedArticle(null)}
-            >
+            <button className="btn btn-close" onClick={handleCloseArticle}>
               ✕
             </button>
             <article>
