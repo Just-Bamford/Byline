@@ -224,19 +224,83 @@ export class BylinePublisher {
   }
 
   /**
-   * Set article price (in USD, converted to XLM by contract)
+   * Set article price on contract
    */
-  async setArticlePrice(articleId: string, priceUsd: number): Promise<void> {
-    // TODO: Call contract to set price
-    console.log(`Setting price for ${articleId}: $${priceUsd}`);
+  async setArticlePrice(articleId: string, priceXlm: number): Promise<void> {
+    try {
+      if (priceXlm < 0) {
+        throw new Error("Price cannot be negative");
+      }
+
+      // TODO: Call Soroban contract to set price
+      // For now, log the action
+      console.log(
+        `[Byline SDK] Setting price for article ${articleId}: ${priceXlm} XLM`,
+      );
+    } catch (error) {
+      console.error("Failed to set article price:", error);
+      throw error;
+    }
   }
 
   /**
-   * Get article price
+   * Get article price from contract
    */
   async getArticlePrice(articleId: string): Promise<number> {
-    // TODO: Query contract for price
-    return 0.002;
+    try {
+      // TODO: Query Soroban contract for current price
+      // For now, return default
+      console.log(`[Byline SDK] Getting price for article ${articleId}`);
+      return 0.002; // 0.002 XLM default
+    } catch (error) {
+      console.error("Failed to get article price:", error);
+      return 0;
+    }
+  }
+
+  /**
+   * Get multiple article prices
+   */
+  async getArticlePrices(articleIds: string[]): Promise<Map<string, number>> {
+    const prices = new Map<string, number>();
+
+    for (const articleId of articleIds) {
+      try {
+        const price = await this.getArticlePrice(articleId);
+        prices.set(articleId, price);
+      } catch (error) {
+        console.error(`Failed to get price for article ${articleId}:`, error);
+        prices.set(articleId, 0);
+      }
+    }
+
+    return prices;
+  }
+
+  /**
+   * Register article on contract
+   */
+  async registerArticle(
+    articleId: string,
+    title: string,
+    price: number,
+  ): Promise<void> {
+    try {
+      if (!articleId || !title) {
+        throw new Error("articleId and title are required");
+      }
+      if (price < 0) {
+        throw new Error("Price cannot be negative");
+      }
+
+      // TODO: Call contract to register article
+      console.log(
+        `[Byline SDK] Registering article: ${articleId} (${title}) at ${price} XLM`,
+      );
+    } catch (error) {
+      console.error("Failed to register article:", error);
+      throw error;
+    }
   }
 
   /**
