@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, Vec, String, Map};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, Vec, String, Map, log, topic};
 
 /// Article metadata stored on-chain
 /// Represents a published article with pricing and publisher info
