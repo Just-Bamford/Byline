@@ -310,10 +310,127 @@ export class BylinePublisher {
     total: number;
     pending: number;
     settled: number;
+    currency: string;
+    lastUpdated: number;
   }> {
-    // TODO: Query backend for earnings
-    return { total: 0, pending: 0, settled: 0 };
+    try {
+      const response = await this.httpClient.get("/earnings");
+      return {
+        ...response.data,
+        currency: response.data.currency || "XLM",
+        lastUpdated: Date.now(),
+      };
+    } catch (error) {
+      console.error("Failed to get earnings:", error);
+      return {
+        total: 0,
+        pending: 0,
+        settled: 0,
+        currency: "XLM",
+        lastUpdated: Date.now(),
+      };
+    }
   }
-}
+
+  /**
+   * Get analytics for a specific article
+   */
+  async getArticleAnalytics(articleId: string): Promise<{
+    reads: number;
+    revenue: number;
+    avgPrice: number;
+  }> {
+    try {
+      const response = await this.httpClient.get(`/articles/${articleId}/stats`);
+      return {
+        reads: response.data.reads || 0,
+        revenue: response.data.revenue || 0,
+        avgPrice: response.data.avgPrice || 0,
+      };
+    } catch (error) {
+      console.error(`Failed to get analytics for article ${articleId}:`, error);
+      return { reads: 0, revenue: 0, avgPrice: 0 };
+    }
+  }
+
+  /**
+   * Get analytics for all articles
+   */
+  async getAllArticleAnalytics(): Promise<{
+    articles: Array<{ articleId: string; reads: number; revenue: number }>;
+    total: { reads: number; revenue: number };
+  }> {
+    try {
+      const response = await this.httpClient.get("/articles/stats");
+      return {
+        articles: response.data.articles || [],
+        total: response.data.total || { reads: 0, revenue: 0 },
+      };
+    } catch (error) {
+      console.error("Failed to get article analytics:", error);
+      return { articles: [], total: { reads: 0, revenue: 0 } };
+    }
+  }
+
+  /**
+   * Get reader statistics
+   */
+  async getReaderAnalytics(readerId: string): Promise<{
+    totalSpent: number;
+    articlesRead: number;
+    avgPrice: number;
+  }> {
+    try {
+      const response = await this.httpClient.get(`/readers/${readerId}/stats`);
+      return {
+        totalSpent: response.data.totalSpent || 0,
+        articlesRead: response.data.articlesRead || 0,
+        avgPrice: response.data.avgPrice || 0,
+      };
+    } catch (error) {
+      console.error(`Failed to get analytics for reader ${readerId}:`, error);
+      return { totalSpent: 0, articlesRead: 0, avgPrice: 0 };
+    }
+  }
+
+  /**
+   * Get top performing articles
+   */
+  async getTopArticles(limit: number = 10): Promise<
+    Array<{ articleId: string; reads: number; revenue: number; avgPrice: number }>
+  > {
+    try {
+      const response = await this.httpClient.get("/top-articles", {
+        params: { limit },
+      });
+      return response.data || [];
+    } catch (error) {
+      console.error("Failed to get top articles:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Record a read event
+   */
+  async recordRead(articleId: string, readerId: string, price: number): Promise<void> {
+    try {
+      if (!articleId || !readerId) {
+        throw new Error("articleId and readerId are required");
+      }
+      if (price < 0) {
+        throw new Error("Price cannot be negative");
+      }
+
+      await this.httpClient.post("/record-read", {
+        articleId,
+        readerId,
+        price,
+      });
+    } catch (error) {
+      console.error("Failed to record read:", error);
+      throw error;
+    }
+  }
 
 export default BylinePublisher;
