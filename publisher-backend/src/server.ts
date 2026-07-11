@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import { verifyToken, clearExpiredTokens } from "./services/tokenService";
 import {
   getEarnings,
@@ -13,6 +13,23 @@ const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
+const NODE_ENV = process.env.NODE_ENV || "development";
+
+// Middleware: Request logging
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${req.method} ${req.path}`);
+  next();
+});
+
+// Middleware: CORS headers
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const corsOrigin = process.env.CORS_ORIGIN || "*";
+  res.header("Access-Control-Allow-Origin", corsOrigin);
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  next();
+});
 
 // Clear expired tokens every 5 minutes
 setInterval(clearExpiredTokens, 5 * 60 * 1000);
