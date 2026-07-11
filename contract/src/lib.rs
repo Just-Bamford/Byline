@@ -2,23 +2,76 @@
 
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, Vec, String, Map};
 
-#[derive(Clone)]
-#[contracttype]
-pub struct AccessToken {
-    pub reader: Address,
-    pub article_id: String,
-    pub price: i128,
-    pub timestamp: u64,
-    pub expiry: u64,
-}
-
+/// Article metadata stored on-chain
+/// Represents a published article with pricing and publisher info
 #[derive(Clone)]
 #[contracttype]
 pub struct Article {
+    /// Unique article identifier
     pub id: String,
+    
+    /// Publisher's Stellar address
     pub publisher: Address,
+    
+    /// Article price in stroops (1 XLM = 10,000,000 stroops)
     pub price: i128,
+    
+    /// Unix timestamp when article was published
     pub created_at: u64,
+    
+    /// Article title for metadata
+    pub title: String,
+    
+    /// Optional article category/tags
+    pub category: String,
+}
+
+/// Access token issued to readers for article access
+/// Token is valid for 24 hours from issuance
+#[derive(Clone)]
+#[contracttype]
+pub struct AccessToken {
+    /// Reader's Stellar address
+    pub reader: Address,
+    
+    /// ID of article being accessed
+    pub article_id: String,
+    
+    /// Publisher's address (for revenue tracking)
+    pub publisher: Address,
+    
+    /// Price paid in stroops
+    pub price: i128,
+    
+    /// Unix timestamp when token was issued
+    pub timestamp: u64,
+    
+    /// Unix timestamp when token expires (24 hours from issue)
+    pub expiry: u64,
+    
+    /// Cryptographic nonce for replay attack prevention
+    pub nonce: u64,
+}
+
+/// Read event for analytics tracking
+/// Recorded when reader views purchased article
+#[derive(Clone)]
+#[contracttype]
+pub struct ReadEvent {
+    /// Reader's Stellar address
+    pub reader: Address,
+    
+    /// Article ID that was read
+    pub article_id: String,
+    
+    /// Publisher's address
+    pub publisher: Address,
+    
+    /// Unix timestamp when article was read
+    pub timestamp: u64,
+    
+    /// Time spent reading in seconds
+    pub duration: u32,
 }
 
 #[contract]
