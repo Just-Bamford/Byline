@@ -434,3 +434,66 @@ export class BylinePublisher {
   }
 
 export default BylinePublisher;
+
+/**
+ * ============================================================================
+ * SDK USAGE EXAMPLES
+ * ============================================================================
+ *
+ * Basic Setup:
+ * ```typescript
+ * import BylinePublisher from "@byline/publisher-sdk";
+ *
+ * const byline = new BylinePublisher({
+ *   contractId: "CBVG3Z4VBW34DGRVW5YSQQ2XYGOWXHVCM25LJKSM2PQBKGXQJNFRHR7",
+ *   verificationServiceUrl: "http://localhost:3000",
+ *   publisherAddress: "GBUQWP3BOUZX34ULNQG23RQ6F4BVDERBSUM2QYU5WRAPPER5OINANIBJLQ",
+ * });
+ * ```
+ *
+ * From Environment Variables:
+ * ```typescript
+ * const byline = BylinePublisher.fromEnv();
+ * ```
+ *
+ * Verify Token:
+ * ```typescript
+ * const token = {
+ *   reader: "GBQCEJBGX5XNNXKHWVWPNZ3EXIPY3GBDKWQKFQ5QGBP2J4VKQCN5Q2O",
+ *   article_id: "article-123",
+ *   price: 500000,
+ *   timestamp: 1705100000,
+ *   expiry: 1705186400,
+ * };
+ *
+ * const isValid = await byline.verifyToken(token);
+ * if (isValid) {
+ *   console.log("Access granted!");
+ * }
+ * ```
+ *
+ * Check Token Expiry:
+ * ```typescript
+ * const timeRemaining = byline.getTokenTimeRemaining(token);
+ * console.log(`Token valid for ${timeRemaining} more seconds`);
+ * ```
+ *
+ * Get Earnings:
+ * ```typescript
+ * const earnings = await byline.getEarnings();
+ * console.log(`Total earnings: ${earnings.total} XLM`);
+ * ```
+ *
+ * Get Article Stats:
+ * ```typescript
+ * const stats = await byline.getArticleAnalytics("article-123");
+ * console.log(`Reads: ${stats.reads}, Revenue: ${stats.revenue} XLM`);
+ * ```
+ *
+ * Record Read Event:
+ * ```typescript
+ * await byline.recordRead("article-123", "reader-id", 0.005);
+ * ```
+ *
+ * ============================================================================
+ */
