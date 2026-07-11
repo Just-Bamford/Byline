@@ -1,0 +1,10 @@
+# Byline monorepo structure
+# 
+# Core components:
+# - contract/        Smart contract (Soroban/Rust)
+# - reader-app/      Reader frontend (React/TypeScript)
+# - publisher-backend/ Publisher backend (Express/TypeScript)
+# - publisher-sdk/   Publisher SDK (TypeScript)
+#
+# This structure enables independent versioning and deployment of each component
+# while maintaining a unified development experience.
