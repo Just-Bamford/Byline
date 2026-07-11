@@ -37,21 +37,34 @@ setInterval(clearExpiredTokens, 5 * 60 * 1000);
 /**
  * POST /verify
  * Verify an access token from a reader
+ * Body: { token, contractId, articleId }
+ * Returns: { valid: boolean, articleId?: string, expiresAt?: number }
  */
-app.post("/verify", async (req, res) => {
+app.post("/verify", async (req: Request, res: Response) => {
   try {
-    const { token, contractId } = req.body;
+    const { token, contractId, articleId } = req.body;
 
     if (!token || !contractId) {
-      return res.status(400).json({ error: "Missing token or contractId" });
+      return res.status(400).json({
+        error: "Missing token or contractId",
+        code: "INVALID_REQUEST",
+      });
     }
 
     const isValid = await verifyToken(token, contractId);
 
-    res.json({ valid: isValid });
+    res.json({
+      valid: isValid,
+      articleId: articleId || token?.article_id,
+      expiresAt: token?.expiry,
+      timestamp: Date.now(),
+    });
   } catch (error) {
     console.error("Verification error:", error);
-    res.status(500).json({ error: "Verification failed" });
+    res.status(500).json({
+      error: "Verification failed",
+      code: "VERIFICATION_ERROR",
+    });
   }
 });
 
