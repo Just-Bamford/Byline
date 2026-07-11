@@ -136,18 +136,91 @@ export class BylinePublisher {
    */
   async verifyToken(token: AccessToken): Promise<boolean> {
     try {
-      const response = await axios.post(
-        `${this.config.verificationServiceUrl}/verify`,
-        {
-          token,
-          contractId: this.config.contractId,
-        },
-      );
-      return response.data.valid;
+      // Check cache first
+      const cacheKey = `${token.reader}:${token.article_id}`;
+      const cached = this.tokenCache.get(cacheKey);
+      if (cached && Date.now() < cached.expiry) {
+        return cached.valid;
+      }
+
+      const response = await this.httpClient.post("/verify", {
+        token,
+        contractId: this.config.contractId,
+        articleId: token.article_id,
+      });
+
+      const isValid = response.data.valid;
+
+      // Cache result
+      this.tokenCache.set(cacheKey, {
+        valid: isValid,
+        expiry: token.expiry * 1000 || Date.now() + 5 * 60 * 1000,
+      });
+
+      return isValid;
     } catch (error) {
       console.error("Token verification failed:", error);
       return false;
     }
+  }
+
+  /**
+   * Verify token and get detailed information
+   */
+  async verifyTokenDetailed(token: AccessToken): Promise<{
+    valid: boolean;
+    articleId?: string;
+    expiresAt?: number;
+    error?: string;
+  }> {
+    try {
+      const response = await this.httpClient.post("/verify", {
+        token,
+        contractId: this.config.contractId,
+      });
+
+      return {
+        valid: response.data.valid,
+        articleId: response.data.articleId,
+        expiresAt: response.data.expiresAt,
+      };
+    } catch (error: any) {
+      return {
+        valid: false,
+        error: error.message || "Verification failed",
+      };
+    }
+  }
+
+  /**
+   * Check if token is expired
+   */
+  isTokenExpired(token: AccessToken): boolean {
+    const currentTime = Math.floor(Date.now() / 1000);
+    return currentTime > token.expiry;
+  }
+
+  /**
+   * Get token remaining validity in seconds
+   */
+  getTokenTimeRemaining(token: AccessToken): number {
+    const currentTime = Math.floor(Date.now() / 1000);
+    const remaining = token.expiry - currentTime;
+    return Math.max(0, remaining);
+  }
+
+  /**
+   * Grant access to article (after verification)
+   * Helper method for publishers
+   */
+  async grantAccess(
+    token: AccessToken,
+  ): Promise<{ granted: boolean; articleId: string }> {
+    const isValid = await this.verifyToken(token);
+    return {
+      granted: isValid,
+      articleId: token.article_id,
+    };
   }
 
   /**
