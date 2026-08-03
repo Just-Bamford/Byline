@@ -1,0 +1,59 @@
+name: Build Docker Images
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-backend:
+    name: Build Backend Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./publisher-backend
+          push: false
+          tags: byline-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-frontend:
+    name: Build Frontend Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./reader-app
+          push: false
+          tags: byline-reader:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-compose:
+    name: Verify Docker Compose
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Validate docker-compose
+        run: docker compose config
+
+      - name: Build compose services
+        run: docker compose build --no-cache

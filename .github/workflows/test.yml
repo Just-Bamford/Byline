@@ -1,0 +1,131 @@
+name: Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test-backend:
+    name: Test Backend (Node.js)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: byline_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "publisher-backend/package-lock.json"
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ./publisher-backend
+
+      - name: Run linter
+        run: npm run lint || true
+        working-directory: ./publisher-backend
+
+      - name: Compile TypeScript
+        run: npm run build
+        working-directory: ./publisher-backend
+
+  test-frontend:
+    name: Test Frontend (React)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "reader-app/package-lock.json"
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ./reader-app
+
+      - name: Run linter
+        run: npm run lint
+        working-directory: ./reader-app
+
+      - name: Build application
+        run: npm run build
+        working-directory: ./reader-app
+
+  test-contract:
+    name: Test Smart Contract (Rust)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v3
+        with:
+          path: contract/target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build contract
+        run: cargo build --target wasm32-unknown-unknown --release
+        working-directory: ./contract
+
+      - name: Run tests
+        run: cargo test
+        working-directory: ./contract
+
+  test-sdk:
+    name: Test Publisher SDK (TypeScript)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "publisher-sdk/package-lock.json"
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ./publisher-sdk
+
+      - name: Build
+        run: npm run build
+        working-directory: ./publisher-sdk

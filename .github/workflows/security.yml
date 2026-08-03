@@ -1,0 +1,97 @@
+name: Security
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run security checks daily at 2 AM UTC
+    - cron: "0 2 * * *"
+
+jobs:
+  dependency-check:
+    name: Dependency Security Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: ./publisher-backend
+
+      - name: Check backend vulnerabilities
+        run: npm audit --production || true
+        working-directory: ./publisher-backend
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: ./reader-app
+
+      - name: Check frontend vulnerabilities
+        run: npm audit --production || true
+        working-directory: ./reader-app
+
+      - name: Install SDK dependencies
+        run: npm ci
+        working-directory: ./publisher-sdk
+
+      - name: Check SDK vulnerabilities
+        run: npm audit --production || true
+        working-directory: ./publisher-sdk
+
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["javascript", "typescript"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v2
+        with:
+          languages: ${{ matrix.language }}
+
+      - uses: github/codeql-action/autobuild@v2
+
+      - uses: github/codeql-action/analyze@v2
+
+  container-scan:
+    name: Container Image Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: ./publisher-backend
+          push: false
+          tags: byline-backend:scan
+          outputs: type=docker,dest=/tmp/backend.tar
+
+      - name: Run Trivy scan on backend
+        uses: aquasecurity/trivy-action@master
+        with:
+          input: "/tmp/backend.tar"
+          format: "sarif"
+          output: "trivy-backend.sarif"
+          severity: "CRITICAL,HIGH"
+
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: "trivy-backend.sarif"
