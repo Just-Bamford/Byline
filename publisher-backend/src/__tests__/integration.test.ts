@@ -170,9 +170,9 @@ describe("Integration Tests", () => {
         "GBUQWP3BOUZX34ULNQG23RQ6F4BFSRJSU6DCFTL7NNLGYAGXUCESA5ON";
       const invalidAddress = "not-a-valid-address";
 
-      // Just verify the format
-      expect(validAddress).toMatch(/^G[A-Z0-9]{54}$/);
-      expect(invalidAddress).not.toMatch(/^G[A-Z0-9]{54}$/);
+      // Just verify the format (56 chars: G + 55 alphanumeric)
+      expect(validAddress).toMatch(/^G[A-Z0-9]{55}$/);
+      expect(invalidAddress).not.toMatch(/^G[A-Z0-9]{55}$/);
     });
   });
 });

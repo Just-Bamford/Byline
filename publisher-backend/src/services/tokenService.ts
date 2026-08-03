@@ -137,14 +137,21 @@ function verifyTokenSignature(token: any): boolean {
  */
 function constructTokenMessage(token: any): Buffer {
   // Create a canonical message representation
+  // Convert BigInt to string to avoid JSON.stringify errors
   const message = JSON.stringify({
     reader: token.reader,
     article_id: token.article_id,
     publisher: token.publisher,
-    price: token.price,
-    timestamp: token.timestamp,
-    expiry: token.expiry,
-    nonce: token.nonce,
+    price:
+      typeof token.price === "bigint" ? token.price.toString() : token.price,
+    timestamp:
+      typeof token.timestamp === "bigint"
+        ? token.timestamp.toString()
+        : token.timestamp,
+    expiry:
+      typeof token.expiry === "bigint" ? token.expiry.toString() : token.expiry,
+    nonce:
+      typeof token.nonce === "bigint" ? token.nonce.toString() : token.nonce,
   });
 
   return crypto.createHash("sha256").update(message).digest();
