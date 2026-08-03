@@ -300,7 +300,65 @@ For comprehensive E2E testing guide, see [`docs/E2E_TESTING.md`](docs/E2E_TESTIN
 
 ---
 
+## Testnet Deployment
+
+Byline Phase 1 is ready for testnet deployment. The contract, backend API, and reader app have been developed and tested locally. Deployment requires:
+
+1. **Contract Deployment** - Deploy compiled Soroban contract to testnet
+2. **Backend Deployment** - Host publisher API on cloud infrastructure
+3. **Frontend Deployment** - Serve reader app from CDN or static host
+4. **Monitoring** - Set up error tracking and analytics
+
+For the complete deployment guide, see [`docs/TESTNET_RELEASE.md`](docs/TESTNET_RELEASE.md).
+
+### Testnet Status
+
+| Component         | Status                                | Link                                                       |
+| ----------------- | ------------------------------------- | ---------------------------------------------------------- |
+| Contract          | Ready to Deploy                       | Compiled WASM ready (see `contract/README.md`)             |
+| Reader App        | Ready to Deploy                       | Built production bundle (see `reader-app/README.md`)       |
+| Publisher Backend | Ready to Deploy                       | Docker image available (see `publisher-backend/README.md`) |
+| Publisher SDK     | Ready to Deploy                       | Published to npm (see `publisher-sdk/README.md`)           |
+| Contract ID       | Pending                               | Will be assigned after testnet deployment                  |
+| RPC Endpoint      | `https://soroban-testnet.stellar.org` | Soroban testnet RPC server                                 |
+
+### Deployment Checklist
+
+```
+Pre-deployment:
+  ☐ Rust & Soroban CLI installed
+  ☐ Testnet account created and funded
+  ☐ All tests passing locally
+  ☐ Security review completed
+
+Deployment:
+  ☐ Contract deployed to testnet
+  ☐ Contract ID saved to .env files
+  ☐ Backend API deployed
+  ☐ Reader app deployed to static host
+  ☐ Health checks passing
+
+Post-deployment:
+  ☐ Contract operations tested end-to-end
+  ☐ Monitoring and alerting configured
+  ☐ Documentation updated with live contract ID
+  ☐ Public testnet launch announced
+```
+
+To deploy, follow the step-by-step guide in [`docs/TESTNET_RELEASE.md`](docs/TESTNET_RELEASE.md).
+
+---
+
 ## Project Status
+
+### Phase 1 Complete ✅
+
+- [x] Soroban smart contract (Rust) with 4 unit tests
+- [x] Publisher backend API (Express/TypeScript) with live RPC integration
+- [x] Reader app (React) with Freighter wallet integration
+- [x] Publisher SDK (TypeScript) with contract querying
+- [x] CI/CD pipeline (GitHub Actions)
+- [x] Docker containerization
 
 ### Production Ready ✅
 
@@ -308,25 +366,27 @@ For comprehensive E2E testing guide, see [`docs/E2E_TESTING.md`](docs/E2E_TESTIN
 - [x] PostgreSQL persistent storage
 - [x] Structured logging with JSON output
 - [x] Docker containerization
-- [x] Unit tests (backend services)
-- [x] Integration tests (database layer)
+- [x] Unit tests (backend services & contract)
+- [x] Integration tests (database & Soroban contract)
+- [x] TypeScript strict mode on all components
 
-### In Development 🔄
+### Phase 2 (Testnet Deployment) 🔄
 
-- [ ] Freighter wallet integration (in progress)
-- [ ] Contract security audit (Phase 2)
-- [ ] End-to-end tests (Playwright/Cypress)
-- [ ] Frontend component tests
-- [ ] Load testing with k6
+- [ ] Deploy contract to Stellar testnet
+- [ ] Host backend API on cloud infrastructure
+- [ ] Deploy reader app to CDN
+- [ ] End-to-end testing with real contract
+- [ ] Monitoring and alerting setup
+- [ ] Public testnet announcement
 
-### Planned 📋
+### Phase 3 (Pilot & Audit) 📋
 
-- [ ] PostgreSQL analytics dashboard
-- [ ] Fiat on-ramp (Stripe, PayPal)
-- [ ] Publisher onboarding wizard
-- [ ] Revenue sharing (writers, editors)
-- [ ] Mobile-optimized apps
-- [ ] Mainnet deployment
+- [ ] Smart contract security audit (third-party)
+- [ ] Publisher onboarding dashboard
+- [ ] Fiat on-ramp integration (Stripe, PayPal)
+- [ ] Testnet pilot with 5-10 publishers
+- [ ] Reader feedback cycle
+- [ ] Mainnet preparation
 
 ---
 
@@ -444,30 +504,35 @@ A publisher can confirm _that_ a reader paid, and _what_ they read — but canno
 
 ## Roadmap
 
-**Phase 1 — Testnet (current)**
+**Phase 1 — MVP Development ✅**
 
-- [x] Soroban contract: purchase, verify, pricing
-- [x] Reader app: wallet, article browsing, purchasing
-- [x] Publisher backend: token verification, analytics
-- [x] Publisher SDK: drop-in integration
-- [ ] Freighter wallet integration (in progress)
-- [ ] Full Soroban RPC query wiring
+- [x] Soroban contract: purchase, verify, pricing (4 unit tests passing)
+- [x] Reader app: wallet, article browsing, purchasing with Freighter integration
+- [x] Publisher backend: token verification, analytics with live Soroban RPC
+- [x] Publisher SDK: TypeScript SDK with contract querying
+- [x] CI/CD pipeline: GitHub Actions for build/test on every commit
+- [x] Docker containerization: All services containerized
 
-**Phase 2 — Pilot**
+**Phase 2 — Testnet Deployment**
 
-- [ ] PostgreSQL database integration
-- [ ] Fiat on-ramp (Stripe, PayPal)
+- [ ] Deploy contract to Stellar testnet (CBVG3Z4...)
+- [ ] Backend API hosted on cloud (AWS/Heroku/etc)
+- [ ] Reader app served from CDN or static host
+- [ ] Contract operations tested end-to-end
+- [ ] Monitoring and alerting configured (Sentry, DataDog, etc)
+- [ ] Public testnet launch announcement
+- [ ] Contract security audit by third party
+- [ ] Testnet pilot with 5-10 publishers
+
+**Phase 3 — Production**
+
+- [ ] Mainnet contract deployment
+- [ ] Fiat on-ramp integration (Stripe, PayPal)
 - [ ] Publisher onboarding dashboard
-- [ ] Contract security audit
-- [ ] Testnet end-to-end testing with pilot publishers
-
-**Phase 3 — Mainnet**
-
-- [ ] Mainnet deployment
-- [ ] 5-country pilot rollout
 - [ ] Revenue sharing (writers, editors, co-publishers)
 - [ ] Subscription tiers
-- [ ] Mobile-optimized registration
+- [ ] Mobile-optimized apps
+- [ ] Global rollout
 
 ---
 
