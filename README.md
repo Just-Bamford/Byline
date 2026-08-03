@@ -1,4 +1,4 @@
-<div align="center"><h1>Byline</h1><p><strong>Micropayment news protocol on Stellar Soroban.</strong><br/>Pay per article. Not per month. Readers fund journalism article by article. Publishers receive instant settlement. No intermediaries.</p><p><img src="https://img.shields.io/badge/network-Stellar%20Soroban-7C3AED?style=flat-square" alt="Stellar Soroban" /><img src="https://img.shields.io/badge/contract-Rust-CE422B?style=flat-square" alt="Rust" /><img src="https://img.shields.io/badge/frontend-React%2018-61DAFB?style=flat-square" alt="React" /><img src="https://img.shields.io/badge/backend-Express-000000?style=flat-square" alt="Express" /><img src="https://img.shields.io/badge/status-testnet-F59E0B?style=flat-square" alt="Testnet" /><img src="https://img.shields.io/badge/license-MIT-22C55E?style=flat-square" alt="MIT License" /></p></div>
+<div align="center"><h1>Byline</h1><p><strong>Micropayment news protocol on Stellar Soroban.</strong><br/>Pay per article. Not per month. Readers fund journalism article by article. Publishers receive instant settlement. No intermediaries.</p><p><img src="https://img.shields.io/badge/network-Stellar%20Soroban-7C3AED?style=flat-square" alt="Stellar Soroban" /><img src="https://img.shields.io/badge/contract-Rust-CE422B?style=flat-square" alt="Rust" /><img src="https://img.shields.io/badge/frontend-React%2018-61DAFB?style=flat-square" alt="React" /><img src="https://img.shields.io/badge/backend-Express-000000?style=flat-square" alt="Express" /><img src="https://img.shields.io/badge/status-testnet-F59E0B?style=flat-square" alt="Testnet" /><img src="https://img.shields.io/badge/tests-unit%2Fintegration-4CAF50?style=flat-square" alt="Tests" /><img src="https://img.shields.io/badge/ci%2Fcd-github%20actions-2088FF?style=flat-square" alt="CI/CD" /><img src="https://img.shields.io/badge/license-MIT-22C55E?style=flat-square" alt="MIT License" /></p></div>
 
 ---
 
@@ -226,35 +226,51 @@ Health check.
 
 ## Quick Start
 
-### Prerequisites
+### Using Docker Compose (Recommended)
+
+```bash
+# Clone repository
+git clone https://github.com/yourusername/byline.git
+cd byline
+
+# Start all services (PostgreSQL, backend API, frontend)
+docker compose up
+
+# Services will be available at:
+# - Backend API: http://localhost:3000
+# - Reader App: http://localhost:5173
+# - Database: localhost:5432
+```
+
+### Manual Setup
+
+#### Prerequisites
 
 - Node.js 18+
 - Rust 1.70+ (for contract)
-- Stellar CLI (`soroban`)
+- PostgreSQL 14+ (for analytics)
+- Stellar CLI
 
-### 1. Deploy the contract
+#### 1. Deploy the contract
 
 ```bash
 cd contract
 cargo build --target wasm32-unknown-unknown --release
 soroban contract deploy --network testnet
+# Save the returned contract ID
 ```
 
-Save the returned contract ID.
-
-### 2. Run the backend
+#### 2. Run the backend
 
 ```bash
 cd publisher-backend
 cp .env.example .env
-# Set CONTRACT_ID and STELLAR_RPC_URL in .env
+# Edit .env with your contract ID and database URL
 npm install
 npm run dev
 ```
 
-API running at `http://localhost:3000`
-
-### 3. Run the reader app
+#### 3. Run the reader app
 
 ```bash
 cd reader-app
@@ -262,18 +278,153 @@ npm install
 npm run dev
 ```
 
-Portal running at `http://localhost:5173`
+API running at `http://localhost:3000`, Portal at `http://localhost:5173`
 
-### 4. Test the full flow
+### Testing
 
-1. Open `http://localhost:5173`
-2. Create wallet (Freighter or email)
-3. Top up with testnet XLM
-4. Click "Buy for $0.002" on any article
-5. Read the article
-6. Query `GET http://localhost:3000/earnings` to see analytics
+```bash
+# Backend tests
+cd publisher-backend
+npm run test:run
 
-For the complete deployment walkthrough, see [`QUICKSTART.md`](QUICKSTART.md).
+# Contract tests
+cd contract
+cargo test
+
+# Frontend linting
+cd reader-app
+npm run lint
+```
+
+For comprehensive E2E testing guide, see [`docs/E2E_TESTING.md`](docs/E2E_TESTING.md).
+
+---
+
+## Project Status
+
+### Production Ready ✅
+
+- [x] Cryptographic signature verification (Ed25519)
+- [x] PostgreSQL persistent storage
+- [x] Structured logging with JSON output
+- [x] Docker containerization
+- [x] Unit tests (backend services)
+- [x] Integration tests (database layer)
+
+### In Development 🔄
+
+- [ ] Freighter wallet integration (in progress)
+- [ ] Contract security audit (Phase 2)
+- [ ] End-to-end tests (Playwright/Cypress)
+- [ ] Frontend component tests
+- [ ] Load testing with k6
+
+### Planned 📋
+
+- [ ] PostgreSQL analytics dashboard
+- [ ] Fiat on-ramp (Stripe, PayPal)
+- [ ] Publisher onboarding wizard
+- [ ] Revenue sharing (writers, editors)
+- [ ] Mobile-optimized apps
+- [ ] Mainnet deployment
+
+---
+
+## Infrastructure & DevOps
+
+### Continuous Integration / Continuous Deployment
+
+**GitHub Actions Pipelines:**
+
+- **test.yml** - Runs on every PR and push
+  - TypeScript compilation & linting
+  - Backend unit tests (Vitest)
+  - Rust contract tests (cargo test)
+  - Build verification
+
+- **build-docker.yml** - Builds Docker images
+  - Multi-stage backend image
+  - Frontend static asset image
+  - Docker Compose validation
+
+- **security.yml** - Security scanning (daily)
+  - Dependency vulnerability audit
+  - CodeQL static analysis
+  - Container image scanning (Trivy)
+
+### Local Development with Docker
+
+```bash
+# Start everything with hot-reload
+docker compose up
+
+# Rebuild after dependency changes
+docker compose build --no-cache
+
+# View logs
+docker compose logs -f publisher-backend
+
+# Stop services
+docker compose down
+```
+
+### Database
+
+Byline uses PostgreSQL for persistent analytics storage:
+
+- **Articles** - Article metadata and pricing
+- **Read Events** - Track individual article reads
+- **Access Tokens** - Token issuance and validation history
+- **Publisher Earnings** - Aggregate earnings per publisher
+- **Reader Stats** - Reader spending and engagement
+
+Schema automatically initialized on startup.
+
+### Logging
+
+All services output structured JSON logs compatible with:
+
+- ELK Stack (Elasticsearch, Logstash, Kibana)
+- Datadog
+- AWS CloudWatch
+- Google Cloud Logging
+- Grafana Loki
+
+Example log entry:
+
+```json
+{
+  "timestamp": "2024-02-05T10:30:00.000Z",
+  "level": "info",
+  "message": "Token verification completed",
+  "request_id": "1707129000000-a1b2c3d4e5",
+  "valid": true,
+  "articleId": "article-1",
+  "environment": "production"
+}
+```
+
+---
+
+## Contributing
+
+We welcome contributions! Please see [`CONTRIBUTING.md`](CONTRIBUTING.md) for:
+
+- Development setup
+- Code standards
+- Testing requirements
+- Pull request process
+- Community guidelines
+
+## Development
+
+See [`DEVELOPMENT.md`](DEVELOPMENT.md) for detailed information about:
+
+- TypeScript configuration (strict mode)
+- Component-specific setup
+- Development workflow
+- Code standards
+- Continuous integration requirements
 
 ---
 
