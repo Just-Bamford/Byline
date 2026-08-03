@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: byline-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: byline_user
+      POSTGRES_PASSWORD: byline_password
+      POSTGRES_DB: byline
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U byline_user -d byline"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Publisher Backend API
+  publisher-backend:
+    build:
+      context: ./publisher-backend
+      dockerfile: Dockerfile
+    container_name: byline-backend
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://byline_user:byline_password@postgres:5432/byline
+      STELLAR_NETWORK: testnet
+      CONTRACT_ID: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4
+      CORS_ORIGIN: "*"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./publisher-backend/src:/app/src
+      - /app/node_modules
+    command: npm run dev
+
+  # Reader App (optional for testing)
+  reader-app:
+    build:
+      context: ./reader-app
+      dockerfile: Dockerfile
+    container_name: byline-reader
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:3000
+      VITE_CONTRACT_ID: CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4
+    volumes:
+      - ./reader-app/src:/app/src
+      - /app/node_modules
+    command: npm run dev
+
+volumes:
+  postgres_data:
