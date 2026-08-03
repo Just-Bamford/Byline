@@ -22,8 +22,6 @@ jobs:
           context: ./publisher-backend
           push: false
           tags: byline-backend:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   build-frontend:
     name: Build Frontend Docker Image
@@ -40,8 +38,6 @@ jobs:
           context: ./reader-app
           push: false
           tags: byline-reader:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   build-compose:
     name: Verify Docker Compose
@@ -50,10 +46,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: docker/setup-buildx-action@v3
-
       - name: Validate docker-compose
         run: docker compose config
-
-      - name: Build compose services
-        run: docker compose build --no-cache
