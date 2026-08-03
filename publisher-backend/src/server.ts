@@ -2,12 +2,15 @@ import express, { Request, Response, NextFunction } from "express";
 import { verifyToken, clearExpiredTokens } from "./services/tokenService";
 import {
   getEarnings,
-  recordRead,
   getArticleStats,
   getAllArticleStats,
   getReaderStats,
   getTopArticles,
+  getAggregateEarnings,
+  recordRead,
+  type ReadEvent,
 } from "./services/analyticsService";
+import { initializeDatabase, closeDatabase } from "./db/client";
 
 const app = express();
 app.use(express.json());
@@ -95,16 +98,16 @@ app.post("/verify", async (req: Request, res: Response) => {
 /**
  * POST /record-read
  * Record a successful article read for analytics
- * Body: { articleId, readerId, price, duration? }
+ * Body: { articleId, readerId, publisherId, price, duration? }
  * Returns: { success: boolean, recordedAt: number }
  */
 app.post("/record-read", async (req: Request, res: Response) => {
   try {
-    const { articleId, readerId, price, duration } = req.body;
+    const { articleId, readerId, publisherId, price, duration } = req.body;
 
-    if (!articleId || !readerId || price === undefined) {
+    if (!articleId || !readerId || !publisherId || price === undefined) {
       return res.status(400).json({
-        error: "Missing articleId, readerId, or price",
+        error: "Missing articleId, readerId, publisherId, or price",
         code: "INVALID_REQUEST",
       });
     }
@@ -116,7 +119,15 @@ app.post("/record-read", async (req: Request, res: Response) => {
       });
     }
 
-    await recordRead(articleId, readerId, price);
+    const event: ReadEvent = {
+      article_id: articleId,
+      reader_address: readerId,
+      publisher_address: publisherId,
+      price_paid: price,
+      duration_seconds: duration,
+    };
+
+    await recordRead(event);
 
     res.json({
       success: true,
@@ -136,14 +147,24 @@ app.post("/record-read", async (req: Request, res: Response) => {
 /**
  * GET /earnings
  * Get publisher earnings summary
+ * Query: ?publisherAddress=... (optional, if not provided returns aggregate)
  * Returns: { total, pending, settled, lastUpdated }
  */
 app.get("/earnings", async (req: Request, res: Response) => {
   try {
-    const earnings = await getEarnings();
+    const publisherAddress = req.query.publisherAddress as string;
+
+    let earnings;
+    if (publisherAddress) {
+      earnings = await getEarnings(publisherAddress);
+    } else {
+      earnings = await getAggregateEarnings();
+    }
+
     res.json({
       ...earnings,
       currency: "XLM",
+      timestamp: Date.now(),
     });
   } catch (error) {
     console.error("Earnings error:", error);
@@ -248,7 +269,14 @@ app.get("/health", (req: Request, res: Response) => {
   });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  try {
+    await initializeDatabase();
+  } catch (error) {
+    console.error("Failed to start server: database initialization failed");
+    process.exit(1);
+  }
+
   console.log(`
 ╔══════════════════════════════════════════╗
 ║   Byline Publisher Backend                ║
@@ -273,4 +301,17 @@ Docs:       https://github.com/yourusername/byline/docs
 
 Ready to accept requests ✓
   `);
+});
+
+// Graceful shutdown
+process.on("SIGTERM", async () => {
+  console.log("SIGTERM received, shutting down gracefully");
+  await closeDatabase();
+  process.exit(0);
+});
+
+process.on("SIGINT", async () => {
+  console.log("SIGINT received, shutting down gracefully");
+  await closeDatabase();
+  process.exit(0);
 });
