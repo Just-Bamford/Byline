@@ -5,7 +5,7 @@ import {
   clearExpiredTokens,
 } from "./tokenService";
 import crypto from "crypto";
-import { Keypair } from "stellar-sdk";
+import { Keypair } from "@stellar/stellar-sdk";
 
 describe("Token Service", () => {
   beforeEach(() => {

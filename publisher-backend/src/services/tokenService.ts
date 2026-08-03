@@ -3,7 +3,7 @@
  * Validates access tokens against Soroban contract state
  */
 
-import { Keypair, StrKey } from "stellar-sdk";
+import { Keypair, StrKey } from "@stellar/stellar-sdk";
 import crypto from "crypto";
 
 interface TokenCache {

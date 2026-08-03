@@ -9,7 +9,7 @@ import {
   scValToNative,
   Address,
   xdr,
-} from "stellar-sdk";
+} from "@stellar/stellar-sdk";
 import * as dotenv from "dotenv";
 dotenv.config();
 
