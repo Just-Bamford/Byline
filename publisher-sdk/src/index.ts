@@ -1,54 +1,48 @@
-import axios, { AxiosInstance } from "axios";
+import {
+  SorobanRpc,
+  Contract,
+  Networks,
+  TransactionBuilder,
+  BASE_FEE,
+  Keypair,
+  nativeToScVal,
+  scValToNative,
+  Address,
+  xdr,
+} from "@stellar/stellar-sdk";
 
 /**
- * Access token returned by the Byline contract
- */
-export interface AccessToken {
-  reader: string;
-  article_id: string;
-  price: number;
-  timestamp: number;
-  expiry: number;
-  nonce?: number;
-  signature?: string;
-}
-
-/**
- * SDK configuration
+ * Byline SDK configuration
  */
 export interface BylineConfig {
   contractId: string;
-  verificationServiceUrl: string;
-  publisherAddress: string;
-  apiKey?: string;
+  rpcUrl: string;
+  networkPassphrase?: string;
+  publisherSecretKey?: string;
 }
 
 /**
  * Byline Publisher SDK
- * Drop-in integration for publishers to verify tokens and track analytics
+ * Query and interact with Soroban smart contract for token verification and pricing
  */
-export class BylinePublisher {
-  private config: BylineConfig;
-  private httpClient: AxiosInstance;
-  private tokenCache: Map<string, { valid: boolean; expiry: number }>;
+export class BylineSDK {
+  private contractId: string;
+  private rpc: SorobanRpc.Server;
+  private contract: Contract;
+  private networkPassphrase: string;
+  private publisherSecretKey?: string;
 
   /**
    * Initialize SDK with configuration
    */
   constructor(config: BylineConfig) {
     this.validateConfig(config);
-    this.config = config;
-    this.tokenCache = new Map();
+    this.contractId = config.contractId;
+    this.networkPassphrase = config.networkPassphrase ?? Networks.TESTNET;
+    this.publisherSecretKey = config.publisherSecretKey;
 
-    // Setup HTTP client
-    this.httpClient = axios.create({
-      baseURL: config.verificationServiceUrl,
-      timeout: 5000,
-      headers: {
-        "Content-Type": "application/json",
-        ...(config.apiKey && { Authorization: `Bearer ${config.apiKey}` }),
-      },
-    });
+    this.rpc = new SorobanRpc.Server(config.rpcUrl, { allowHttp: false });
+    this.contract = new Contract(this.contractId);
   }
 
   /**
@@ -58,442 +52,208 @@ export class BylinePublisher {
     if (!config.contractId) {
       throw new Error("contractId is required");
     }
-    if (!config.verificationServiceUrl) {
-      throw new Error("verificationServiceUrl is required");
+    if (!config.rpcUrl) {
+      throw new Error("rpcUrl is required");
     }
-    if (!config.publisherAddress) {
-      throw new Error("publisherAddress is required");
-    }
-  }
-
-  /**
-   * Get current configuration
-   */
-  getConfig(): Readonly<BylineConfig> {
-    return Object.freeze({ ...this.config });
-  }
-
-  /**
-   * Update configuration at runtime
-   */
-  updateConfig(updates: Partial<BylineConfig>): void {
-    const newConfig = { ...this.config, ...updates };
-    this.validateConfig(newConfig);
-    this.config = newConfig;
-  }
-
-  /**
-   * Clear token cache
-   */
-  clearCache(): void {
-    this.tokenCache.clear();
-  }
-
-  /**
-   * Get cache statistics
-   */
-  getCacheStats(): { size: number; entries: string[] } {
-    return {
-      size: this.tokenCache.size,
-      entries: Array.from(this.tokenCache.keys()),
-    };
-  }
-
-  /**
-   * Initialize SDK with default configuration
-   * Used for easy setup
-   */
-  static create(config: BylineConfig): BylinePublisher {
-    return new BylinePublisher(config);
   }
 
   /**
    * Create SDK with environment variables
    */
-  static fromEnv(): BylinePublisher {
+  static fromEnv(): BylineSDK {
     const contractId = process.env.STELLAR_CONTRACT_ID;
-    const verificationServiceUrl = process.env.PUBLISHER_API_URL;
-    const publisherAddress = process.env.PUBLISHER_ADDRESS;
-    const apiKey = process.env.PUBLISHER_API_KEY;
+    const rpcUrl = process.env.STELLAR_RPC_URL;
+    const networkPassphrase = process.env.STELLAR_NETWORK_PASSPHRASE;
+    const publisherSecretKey = process.env.PUBLISHER_SECRET_KEY;
 
-    if (!contractId || !verificationServiceUrl || !publisherAddress) {
+    if (!contractId || !rpcUrl) {
       throw new Error(
-        "Missing required environment variables: STELLAR_CONTRACT_ID, PUBLISHER_API_URL, PUBLISHER_ADDRESS",
+        "Missing required environment variables: STELLAR_CONTRACT_ID, STELLAR_RPC_URL",
       );
     }
 
-    return new BylinePublisher({
+    return new BylineSDK({
       contractId,
-      verificationServiceUrl,
-      publisherAddress,
-      apiKey,
+      rpcUrl,
+      networkPassphrase,
+      publisherSecretKey,
     });
   }
 
   /**
-   * Verify an access token from a reader
-   * Returns true if valid, false otherwise
+   * Verify reader access via Soroban contract simulation
+   * Returns true if reader has valid access token for the article
    */
-  async verifyToken(token: AccessToken): Promise<boolean> {
+  async verify(readerAddress: string, articleId: string): Promise<boolean> {
     try {
-      // Check cache first
-      const cacheKey = `${token.reader}:${token.article_id}`;
-      const cached = this.tokenCache.get(cacheKey);
-      if (cached && Date.now() < cached.expiry) {
-        return cached.valid;
+      if (!readerAddress || !articleId) {
+        throw new Error("readerAddress and articleId are required");
       }
 
-      const response = await this.httpClient.post("/verify", {
-        token,
-        contractId: this.config.contractId,
-        articleId: token.article_id,
-      });
+      // Create a dummy account for simulation (doesn't need to be real)
+      const tempKeypair = Keypair.random();
+      const account = await this.rpc.getAccount(tempKeypair.publicKey());
 
-      const isValid = response.data.valid;
+      const tx = new TransactionBuilder(account, {
+        fee: BASE_FEE,
+        networkPassphrase: this.networkPassphrase,
+      })
+        .addOperation(
+          this.contract.call(
+            "verify_token",
+            new Address(readerAddress).toScVal(),
+            nativeToScVal(articleId, { type: "string" }),
+          ),
+        )
+        .setTimeout(30)
+        .build();
 
-      // Cache result
-      this.tokenCache.set(cacheKey, {
-        valid: isValid,
-        expiry: token.expiry * 1000 || Date.now() + 5 * 60 * 1000,
-      });
+      const result = await this.rpc.simulateTransaction(tx);
 
-      return isValid;
+      if (SorobanRpc.Api.isSimulationError(result)) {
+        console.error(
+          `[BylineSDK] Contract simulation error for verify_token: ${result.error}`,
+        );
+        return false;
+      }
+
+      const simResult =
+        result as SorobanRpc.Api.SimulateTransactionSuccessResponse;
+      if (!simResult.result?.retval) {
+        console.error(
+          "[BylineSDK] No return value from verify_token contract call",
+        );
+        return false;
+      }
+
+      return scValToNative(simResult.result.retval) as boolean;
     } catch (error) {
-      console.error("Token verification failed:", error);
-      return false;
+      console.error("[BylineSDK] Verification failed:", error);
+      throw error;
     }
   }
 
   /**
-   * Verify token and get detailed information
+   * Get article price in stroops from contract
+   * Returns the price as a bigint (stroops, 1 XLM = 10_000_000 stroops)
    */
-  async verifyTokenDetailed(token: AccessToken): Promise<{
-    valid: boolean;
-    articleId?: string;
-    expiresAt?: number;
-    error?: string;
-  }> {
+  async getPrice(articleId: string): Promise<bigint> {
     try {
-      const response = await this.httpClient.post("/verify", {
-        token,
-        contractId: this.config.contractId,
-      });
+      if (!articleId) {
+        throw new Error("articleId is required");
+      }
 
-      return {
-        valid: response.data.valid,
-        articleId: response.data.articleId,
-        expiresAt: response.data.expiresAt,
-      };
-    } catch (error: any) {
-      return {
-        valid: false,
-        error: error.message || "Verification failed",
-      };
+      const tempKeypair = Keypair.random();
+      const account = await this.rpc.getAccount(tempKeypair.publicKey());
+
+      const tx = new TransactionBuilder(account, {
+        fee: BASE_FEE,
+        networkPassphrase: this.networkPassphrase,
+      })
+        .addOperation(
+          this.contract.call(
+            "get_article_price",
+            nativeToScVal(articleId, { type: "string" }),
+          ),
+        )
+        .setTimeout(30)
+        .build();
+
+      const result = await this.rpc.simulateTransaction(tx);
+
+      if (SorobanRpc.Api.isSimulationError(result)) {
+        console.error(
+          `[BylineSDK] Contract simulation error for get_article_price: ${result.error}`,
+        );
+        return 0n;
+      }
+
+      const simResult =
+        result as SorobanRpc.Api.SimulateTransactionSuccessResponse;
+      if (!simResult.result?.retval) {
+        console.error(
+          "[BylineSDK] No return value from get_article_price contract call",
+        );
+        return 0n;
+      }
+
+      return scValToNative(simResult.result.retval) as bigint;
+    } catch (error) {
+      console.error("[BylineSDK] Price query failed:", error);
+      throw error;
     }
   }
 
   /**
-   * Check if token is expired
+   * Get total reads count from contract
    */
-  isTokenExpired(token: AccessToken): boolean {
-    const currentTime = Math.floor(Date.now() / 1000);
-    return currentTime > token.expiry;
+  async getTotalReads(): Promise<number> {
+    try {
+      const tempKeypair = Keypair.random();
+      const account = await this.rpc.getAccount(tempKeypair.publicKey());
+
+      const tx = new TransactionBuilder(account, {
+        fee: BASE_FEE,
+        networkPassphrase: this.networkPassphrase,
+      })
+        .addOperation(this.contract.call("get_total_reads"))
+        .setTimeout(30)
+        .build();
+
+      const result = await this.rpc.simulateTransaction(tx);
+
+      if (SorobanRpc.Api.isSimulationError(result)) {
+        console.error(
+          `[BylineSDK] Contract simulation error for get_total_reads: ${result.error}`,
+        );
+        return 0;
+      }
+
+      const simResult =
+        result as SorobanRpc.Api.SimulateTransactionSuccessResponse;
+      if (!simResult.result?.retval) {
+        console.error(
+          "[BylineSDK] No return value from get_total_reads contract call",
+        );
+        return 0;
+      }
+
+      return Number(scValToNative(simResult.result.retval));
+    } catch (error) {
+      console.error("[BylineSDK] Total reads query failed:", error);
+      throw error;
+    }
   }
 
   /**
-   * Get token remaining validity in seconds
+   * Get contract info
    */
-  getTokenTimeRemaining(token: AccessToken): number {
-    const currentTime = Math.floor(Date.now() / 1000);
-    const remaining = token.expiry - currentTime;
-    return Math.max(0, remaining);
-  }
-
-  /**
-   * Grant access to article (after verification)
-   * Helper method for publishers
-   */
-  async grantAccess(
-    token: AccessToken,
-  ): Promise<{ granted: boolean; articleId: string }> {
-    const isValid = await this.verifyToken(token);
+  getContractInfo(): {
+    contractId: string;
+    networkPassphrase: string;
+    rpcUrl: string;
+  } {
     return {
-      granted: isValid,
-      articleId: token.article_id,
+      contractId: this.contractId,
+      networkPassphrase: this.networkPassphrase,
+      rpcUrl: this.rpc.serverURL.toString(),
     };
   }
 
   /**
-   * Set article price on contract
+   * Helper to convert stroops to XLM
    */
-  async setArticlePrice(articleId: string, priceXlm: number): Promise<void> {
-    try {
-      if (priceXlm < 0) {
-        throw new Error("Price cannot be negative");
-      }
-
-      // TODO: Call Soroban contract to set price
-      // For now, log the action
-      console.log(
-        `[Byline SDK] Setting price for article ${articleId}: ${priceXlm} XLM`,
-      );
-    } catch (error) {
-      console.error("Failed to set article price:", error);
-      throw error;
-    }
+  static stroopsToXlm(stroops: bigint | number): number {
+    const val = typeof stroops === "bigint" ? stroops : BigInt(stroops);
+    return Number(val) / 10_000_000;
   }
 
   /**
-   * Get article price from contract
+   * Helper to convert XLM to stroops
    */
-  async getArticlePrice(articleId: string): Promise<number> {
-    try {
-      // TODO: Query Soroban contract for current price
-      // For now, return default
-      console.log(`[Byline SDK] Getting price for article ${articleId}`);
-      return 0.002; // 0.002 XLM default
-    } catch (error) {
-      console.error("Failed to get article price:", error);
-      return 0;
-    }
+  static xlmToStroops(xlm: number): bigint {
+    return BigInt(Math.round(xlm * 10_000_000));
   }
+}
 
-  /**
-   * Get multiple article prices
-   */
-  async getArticlePrices(articleIds: string[]): Promise<Map<string, number>> {
-    const prices = new Map<string, number>();
-
-    for (const articleId of articleIds) {
-      try {
-        const price = await this.getArticlePrice(articleId);
-        prices.set(articleId, price);
-      } catch (error) {
-        console.error(`Failed to get price for article ${articleId}:`, error);
-        prices.set(articleId, 0);
-      }
-    }
-
-    return prices;
-  }
-
-  /**
-   * Register article on contract
-   */
-  async registerArticle(
-    articleId: string,
-    title: string,
-    price: number,
-  ): Promise<void> {
-    try {
-      if (!articleId || !title) {
-        throw new Error("articleId and title are required");
-      }
-      if (price < 0) {
-        throw new Error("Price cannot be negative");
-      }
-
-      // TODO: Call contract to register article
-      console.log(
-        `[Byline SDK] Registering article: ${articleId} (${title}) at ${price} XLM`,
-      );
-    } catch (error) {
-      console.error("Failed to register article:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get publisher earnings
-   */
-  async getEarnings(): Promise<{
-    total: number;
-    pending: number;
-    settled: number;
-    currency: string;
-    lastUpdated: number;
-  }> {
-    try {
-      const response = await this.httpClient.get("/earnings");
-      return {
-        ...response.data,
-        currency: response.data.currency || "XLM",
-        lastUpdated: Date.now(),
-      };
-    } catch (error) {
-      console.error("Failed to get earnings:", error);
-      return {
-        total: 0,
-        pending: 0,
-        settled: 0,
-        currency: "XLM",
-        lastUpdated: Date.now(),
-      };
-    }
-  }
-
-  /**
-   * Get analytics for a specific article
-   */
-  async getArticleAnalytics(articleId: string): Promise<{
-    reads: number;
-    revenue: number;
-    avgPrice: number;
-  }> {
-    try {
-      const response = await this.httpClient.get(`/articles/${articleId}/stats`);
-      return {
-        reads: response.data.reads || 0,
-        revenue: response.data.revenue || 0,
-        avgPrice: response.data.avgPrice || 0,
-      };
-    } catch (error) {
-      console.error(`Failed to get analytics for article ${articleId}:`, error);
-      return { reads: 0, revenue: 0, avgPrice: 0 };
-    }
-  }
-
-  /**
-   * Get analytics for all articles
-   */
-  async getAllArticleAnalytics(): Promise<{
-    articles: Array<{ articleId: string; reads: number; revenue: number }>;
-    total: { reads: number; revenue: number };
-  }> {
-    try {
-      const response = await this.httpClient.get("/articles/stats");
-      return {
-        articles: response.data.articles || [],
-        total: response.data.total || { reads: 0, revenue: 0 },
-      };
-    } catch (error) {
-      console.error("Failed to get article analytics:", error);
-      return { articles: [], total: { reads: 0, revenue: 0 } };
-    }
-  }
-
-  /**
-   * Get reader statistics
-   */
-  async getReaderAnalytics(readerId: string): Promise<{
-    totalSpent: number;
-    articlesRead: number;
-    avgPrice: number;
-  }> {
-    try {
-      const response = await this.httpClient.get(`/readers/${readerId}/stats`);
-      return {
-        totalSpent: response.data.totalSpent || 0,
-        articlesRead: response.data.articlesRead || 0,
-        avgPrice: response.data.avgPrice || 0,
-      };
-    } catch (error) {
-      console.error(`Failed to get analytics for reader ${readerId}:`, error);
-      return { totalSpent: 0, articlesRead: 0, avgPrice: 0 };
-    }
-  }
-
-  /**
-   * Get top performing articles
-   */
-  async getTopArticles(limit: number = 10): Promise<
-    Array<{ articleId: string; reads: number; revenue: number; avgPrice: number }>
-  > {
-    try {
-      const response = await this.httpClient.get("/top-articles", {
-        params: { limit },
-      });
-      return response.data || [];
-    } catch (error) {
-      console.error("Failed to get top articles:", error);
-      return [];
-    }
-  }
-
-  /**
-   * Record a read event
-   */
-  async recordRead(articleId: string, readerId: string, price: number): Promise<void> {
-    try {
-      if (!articleId || !readerId) {
-        throw new Error("articleId and readerId are required");
-      }
-      if (price < 0) {
-        throw new Error("Price cannot be negative");
-      }
-
-      await this.httpClient.post("/record-read", {
-        articleId,
-        readerId,
-        price,
-      });
-    } catch (error) {
-      console.error("Failed to record read:", error);
-      throw error;
-    }
-  }
-
-export default BylinePublisher;
-
-/**
- * ============================================================================
- * SDK USAGE EXAMPLES
- * ============================================================================
- *
- * Basic Setup:
- * ```typescript
- * import BylinePublisher from "@byline/publisher-sdk";
- *
- * const byline = new BylinePublisher({
- *   contractId: "CBVG3Z4VBW34DGRVW5YSQQ2XYGOWXHVCM25LJKSM2PQBKGXQJNFRHR7",
- *   verificationServiceUrl: "http://localhost:3000",
- *   publisherAddress: "GBUQWP3BOUZX34ULNQG23RQ6F4BVDERBSUM2QYU5WRAPPER5OINANIBJLQ",
- * });
- * ```
- *
- * From Environment Variables:
- * ```typescript
- * const byline = BylinePublisher.fromEnv();
- * ```
- *
- * Verify Token:
- * ```typescript
- * const token = {
- *   reader: "GBQCEJBGX5XNNXKHWVWPNZ3EXIPY3GBDKWQKFQ5QGBP2J4VKQCN5Q2O",
- *   article_id: "article-123",
- *   price: 500000,
- *   timestamp: 1705100000,
- *   expiry: 1705186400,
- * };
- *
- * const isValid = await byline.verifyToken(token);
- * if (isValid) {
- *   console.log("Access granted!");
- * }
- * ```
- *
- * Check Token Expiry:
- * ```typescript
- * const timeRemaining = byline.getTokenTimeRemaining(token);
- * console.log(`Token valid for ${timeRemaining} more seconds`);
- * ```
- *
- * Get Earnings:
- * ```typescript
- * const earnings = await byline.getEarnings();
- * console.log(`Total earnings: ${earnings.total} XLM`);
- * ```
- *
- * Get Article Stats:
- * ```typescript
- * const stats = await byline.getArticleAnalytics("article-123");
- * console.log(`Reads: ${stats.reads}, Revenue: ${stats.revenue} XLM`);
- * ```
- *
- * Record Read Event:
- * ```typescript
- * await byline.recordRead("article-123", "reader-id", 0.005);
- * ```
- *
- * ============================================================================
- */
+export default BylineSDK;
