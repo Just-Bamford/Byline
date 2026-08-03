@@ -3,6 +3,9 @@
  * Validates access tokens against Soroban contract state
  */
 
+import { Keypair, StrKey } from "stellar-sdk";
+import crypto from "crypto";
+
 interface TokenCache {
   [key: string]: {
     valid: boolean;
@@ -10,8 +13,14 @@ interface TokenCache {
   };
 }
 
+interface UsedNonce {
+  nonce: string;
+  usedAt: number;
+}
+
 const tokenCache: TokenCache = {};
-const usedNonces: Set<string> = new Set();
+const usedNonces: Map<string, number> = new Map();
+const NONCE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
  * Verify token with Soroban contract integration
@@ -66,15 +75,79 @@ export async function verifyToken(
 }
 
 /**
- * Verify token cryptographic signature
+ * Verify token cryptographic signature using ed25519
+ * Token signature must be created by the publisher using their secret key
  */
 function verifyTokenSignature(token: any): boolean {
-  if (!token.signature || !token.reader || !token.article_id) {
+  try {
+    if (
+      !token.signature ||
+      !token.reader ||
+      !token.article_id ||
+      !token.publisher
+    ) {
+      console.warn("Token missing required signature fields");
+      return false;
+    }
+
+    // Reconstruct the message that was signed
+    const message = constructTokenMessage(token);
+
+    // Convert hex signature to buffer
+    const signatureBuffer = Buffer.from(token.signature, "hex");
+
+    // Verify signature using publisher's public key
+    // In production, this uses the publisher's Stellar address (public key)
+    const publisherPublicKey = token.publisher;
+
+    // Stellar public keys are in StrKey format (starting with 'G')
+    // Extract the raw public key bytes
+    let publicKeyBytes: Buffer;
+    try {
+      publicKeyBytes = StrKey.decodeEd25519PublicKey(publisherPublicKey);
+    } catch (err) {
+      console.warn("Invalid publisher public key format:", publisherPublicKey);
+      return false;
+    }
+
+    // Verify the Ed25519 signature
+    const isValid = crypto.verify(
+      "sha256",
+      message,
+      {
+        key: Buffer.concat([
+          Buffer.from([0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70]), // Ed25519 OID
+          Buffer.from([0x03, 0x21, 0x00]),
+          publicKeyBytes,
+        ]),
+        format: "der",
+      },
+      signatureBuffer,
+    );
+
+    return isValid;
+  } catch (error) {
+    console.error("Signature verification error:", error);
     return false;
   }
-  // TODO: Implement cryptographic signature verification with ed25519
-  // For now, validate structure exists
-  return true;
+}
+
+/**
+ * Construct the deterministic message that should have been signed
+ */
+function constructTokenMessage(token: any): Buffer {
+  // Create a canonical message representation
+  const message = JSON.stringify({
+    reader: token.reader,
+    article_id: token.article_id,
+    publisher: token.publisher,
+    price: token.price,
+    timestamp: token.timestamp,
+    expiry: token.expiry,
+    nonce: token.nonce,
+  });
+
+  return crypto.createHash("sha256").update(message).digest();
 }
 
 /**
@@ -86,12 +159,16 @@ export async function isTokenReplayed(token: any): Promise<boolean> {
   }
 
   const nonceKey = `nonce:${token.nonce}`;
+  const now = Date.now();
+
+  // Check if nonce has been used
   if (usedNonces.has(nonceKey)) {
-    return true; // Nonce already used
+    console.warn("Replay attack detected: nonce already used");
+    return true;
   }
 
-  // Mark nonce as used
-  usedNonces.add(nonceKey);
+  // Mark nonce as used with timestamp
+  usedNonces.set(nonceKey, now);
   return false;
 }
 
@@ -119,6 +196,9 @@ export function clearExpiredTokens(): void {
   });
 
   // Clear old nonces (older than 24 hours)
-  // Note: usedNonces is Set, can't iterate with expiry easily
-  // Consider using Map<string, timestamp> in future
+  usedNonces.forEach((timestamp, nonceKey) => {
+    if (now - timestamp > NONCE_TTL_MS) {
+      usedNonces.delete(nonceKey);
+    }
+  });
 }
