@@ -11,6 +11,11 @@ import {
   type ReadEvent,
 } from "./services/analyticsService";
 import { initializeDatabase, closeDatabase } from "./db/client";
+import {
+  loggingMiddleware,
+  errorLoggingMiddleware,
+} from "./middleware/logging";
+import { logger } from "./utils/logger";
 
 const app = express();
 app.use(express.json());
@@ -18,12 +23,8 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || "development";
 
-// Middleware: Request logging
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] ${req.method} ${req.path}`);
-  next();
-});
+// Middleware: Structured logging
+app.use(loggingMiddleware);
 
 // Middleware: CORS headers
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -50,13 +51,22 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // Middleware: Global error handler
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  console.error("Unhandled error:", err);
+  const logger = req.logger || logger;
+  logger.error("Unhandled error", err, {
+    path: req.path,
+    method: req.method,
+  });
+
   res.status(500).json({
     error: "Internal server error",
     code: "SERVER_ERROR",
+    request_id: req.id,
     message: NODE_ENV === "development" ? err.message : undefined,
   });
 });
+
+// Middleware: Error logging
+app.use(errorLoggingMiddleware);
 
 // Clear expired tokens every 5 minutes
 setInterval(clearExpiredTokens, 5 * 60 * 1000);
@@ -72,13 +82,20 @@ app.post("/verify", async (req: Request, res: Response) => {
     const { token, contractId, articleId } = req.body;
 
     if (!token || !contractId) {
+      req.logger.warn("Verification request missing required fields");
       return res.status(400).json({
         error: "Missing token or contractId",
         code: "INVALID_REQUEST",
       });
     }
 
+    req.logger.debug("Verifying token", { articleId });
     const isValid = await verifyToken(token, contractId);
+
+    req.logger.info("Token verification completed", {
+      valid: isValid,
+      articleId,
+    });
 
     res.json({
       valid: isValid,
@@ -87,10 +104,11 @@ app.post("/verify", async (req: Request, res: Response) => {
       timestamp: Date.now(),
     });
   } catch (error) {
-    console.error("Verification error:", error);
+    req.logger.error("Token verification failed", error);
     res.status(500).json({
       error: "Verification failed",
       code: "VERIFICATION_ERROR",
+      request_id: req.id,
     });
   }
 });
@@ -106,6 +124,7 @@ app.post("/record-read", async (req: Request, res: Response) => {
     const { articleId, readerId, publisherId, price, duration } = req.body;
 
     if (!articleId || !readerId || !publisherId || price === undefined) {
+      req.logger.warn("Record-read request missing required fields");
       return res.status(400).json({
         error: "Missing articleId, readerId, publisherId, or price",
         code: "INVALID_REQUEST",
@@ -113,6 +132,7 @@ app.post("/record-read", async (req: Request, res: Response) => {
     }
 
     if (price < 0) {
+      req.logger.warn("Record-read request has negative price");
       return res.status(400).json({
         error: "Price cannot be negative",
         code: "INVALID_PRICE",
@@ -129,6 +149,8 @@ app.post("/record-read", async (req: Request, res: Response) => {
 
     await recordRead(event);
 
+    req.logger.info("Read event recorded", { articleId, publisherId, price });
+
     res.json({
       success: true,
       recordedAt: Date.now(),
@@ -136,10 +158,11 @@ app.post("/record-read", async (req: Request, res: Response) => {
       readerId,
     });
   } catch (error) {
-    console.error("Record read error:", error);
+    req.logger.error("Failed to record read", error);
     res.status(500).json({
       error: "Failed to record read",
       code: "RECORD_ERROR",
+      request_id: req.id,
     });
   }
 });
@@ -154,6 +177,8 @@ app.get("/earnings", async (req: Request, res: Response) => {
   try {
     const publisherAddress = req.query.publisherAddress as string;
 
+    req.logger.debug("Fetching earnings", { publisherAddress });
+
     let earnings;
     if (publisherAddress) {
       earnings = await getEarnings(publisherAddress);
@@ -161,16 +186,22 @@ app.get("/earnings", async (req: Request, res: Response) => {
       earnings = await getAggregateEarnings();
     }
 
+    req.logger.info("Earnings fetched successfully", {
+      publisherAddress,
+      total: earnings.total,
+    });
+
     res.json({
       ...earnings,
       currency: "XLM",
       timestamp: Date.now(),
     });
   } catch (error) {
-    console.error("Earnings error:", error);
+    req.logger.error("Failed to fetch earnings", error);
     res.status(500).json({
       error: "Failed to fetch earnings",
       code: "EARNINGS_ERROR",
+      request_id: req.id,
     });
   }
 });
@@ -184,6 +215,7 @@ app.get("/articles/:articleId/stats", async (req: Request, res: Response) => {
     const { articleId } = req.params;
 
     if (!articleId) {
+      req.logger.warn("Article stats request missing article ID");
       return res.status(400).json({
         error: "Article ID is required",
         code: "MISSING_ARTICLE_ID",
@@ -191,15 +223,21 @@ app.get("/articles/:articleId/stats", async (req: Request, res: Response) => {
     }
 
     const stats = await getArticleStats(articleId);
+    req.logger.info("Article stats fetched", {
+      articleId,
+      read_count: stats.read_count,
+    });
+
     res.json({
       ...stats,
       currency: "XLM",
     });
   } catch (error) {
-    console.error("Article stats error:", error);
+    req.logger.error("Failed to fetch article stats", error);
     res.status(500).json({
       error: "Failed to fetch article stats",
       code: "STATS_ERROR",
+      request_id: req.id,
     });
   }
 });
@@ -211,16 +249,18 @@ app.get("/articles/:articleId/stats", async (req: Request, res: Response) => {
 app.get("/articles/stats", async (req: Request, res: Response) => {
   try {
     const stats = await getAllArticleStats();
+    req.logger.info("All article stats fetched", { count: stats.length });
     res.json({
-      ...stats,
+      articles: stats,
       currency: "XLM",
       timestamp: Date.now(),
     });
   } catch (error) {
-    console.error("All articles stats error:", error);
+    req.logger.error("Failed to fetch all article stats", error);
     res.status(500).json({
       error: "Failed to fetch article stats",
       code: "STATS_ERROR",
+      request_id: req.id,
     });
   }
 });
@@ -229,14 +269,34 @@ app.get("/articles/stats", async (req: Request, res: Response) => {
  * GET /readers/:readerId/stats
  * Get stats for a specific reader
  */
-app.get("/readers/:readerId/stats", async (req, res) => {
+app.get("/readers/:readerId/stats", async (req: Request, res: Response) => {
   try {
     const { readerId } = req.params;
+    req.logger.debug("Fetching reader stats", { readerId });
+
     const stats = await getReaderStats(readerId);
+
+    if (!stats) {
+      req.logger.info("No stats found for reader", { readerId });
+      return res.status(404).json({
+        error: "Reader not found",
+        code: "READER_NOT_FOUND",
+      });
+    }
+
+    req.logger.info("Reader stats fetched", {
+      readerId,
+      articles_read: stats.articles_read,
+    });
+
     res.json(stats);
   } catch (error) {
-    console.error("Reader stats error:", error);
-    res.status(500).json({ error: "Failed to fetch reader stats" });
+    req.logger.error("Failed to fetch reader stats", error);
+    res.status(500).json({
+      error: "Failed to fetch reader stats",
+      code: "STATS_ERROR",
+      request_id: req.id,
+    });
   }
 });
 
@@ -244,14 +304,22 @@ app.get("/readers/:readerId/stats", async (req, res) => {
  * GET /top-articles
  * Get top performing articles
  */
-app.get("/top-articles", async (req, res) => {
+app.get("/top-articles", async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 10;
+    req.logger.debug("Fetching top articles", { limit });
+
     const topArticles = await getTopArticles(limit);
+
+    req.logger.info("Top articles fetched", { count: topArticles.length });
     res.json(topArticles);
   } catch (error) {
-    console.error("Top articles error:", error);
-    res.status(500).json({ error: "Failed to fetch top articles" });
+    req.logger.error("Failed to fetch top articles", error);
+    res.status(500).json({
+      error: "Failed to fetch top articles",
+      code: "STATS_ERROR",
+      request_id: req.id,
+    });
   }
 });
 
@@ -261,6 +329,7 @@ app.get("/top-articles", async (req, res) => {
  * Returns: { status: 'ok', uptime: number, timestamp: string }
  */
 app.get("/health", (req: Request, res: Response) => {
+  req.logger.debug("Health check");
   res.json({
     status: "ok",
     uptime: process.uptime(),
@@ -272,8 +341,15 @@ app.get("/health", (req: Request, res: Response) => {
 app.listen(PORT, async () => {
   try {
     await initializeDatabase();
+    logger.info("Server started successfully", {
+      port: PORT,
+      environment: NODE_ENV,
+    });
   } catch (error) {
-    console.error("Failed to start server: database initialization failed");
+    logger.error(
+      "Failed to start server: database initialization failed",
+      error,
+    );
     process.exit(1);
   }
 
@@ -305,13 +381,13 @@ Ready to accept requests ✓
 
 // Graceful shutdown
 process.on("SIGTERM", async () => {
-  console.log("SIGTERM received, shutting down gracefully");
+  logger.info("SIGTERM received, shutting down gracefully");
   await closeDatabase();
   process.exit(0);
 });
 
 process.on("SIGINT", async () => {
-  console.log("SIGINT received, shutting down gracefully");
+  logger.info("SIGINT received, shutting down gracefully");
   await closeDatabase();
   process.exit(0);
 });
