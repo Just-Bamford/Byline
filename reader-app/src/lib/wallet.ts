@@ -50,15 +50,15 @@ export async function connectFreighter(): Promise<string> {
  * Get XLM balance for a wallet address from Horizon.
  */
 export async function getBalance(publicKey: string): Promise<string> {
-  const rpc = new SorobanRpc.Server(RPC_URL);
   try {
-    const account = await rpc.getAccount(publicKey);
     // account.balances is available via Horizon — use fetch fallback
     const resp = await fetch(
       `https://horizon-testnet.stellar.org/accounts/${publicKey}`,
     );
-    const data = await resp.json();
-    const xlm = data.balances?.find((b: any) => b.asset_type === "native");
+    const data = (await resp.json()) as {
+      balances?: Array<{ asset_type: string; balance: string }>;
+    };
+    const xlm = data.balances?.find((b) => b.asset_type === "native");
     return xlm ? parseFloat(xlm.balance).toFixed(4) : "0.0000";
   } catch {
     return "0.0000";

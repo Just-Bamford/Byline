@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import "./WalletUI.css";
 
 interface WalletUIProps {
@@ -21,7 +21,6 @@ export function WalletUI({
   const [error, setError] = useState<string | null>(null);
   const [showWalletInfo, setShowWalletInfo] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string>("");
-  const [topUpStatus, setTopUpStatus] = useState<string>("");
   const [transactions, setTransactions] = useState<
     Array<{ type: string; amount: number; timestamp: number }>
   >([]);
@@ -41,19 +40,14 @@ export function WalletUI({
   const handleTopUp = async (amount: number) => {
     setLoading(true);
     setError(null);
-    setTopUpStatus(`Adding ${amount} XLM...`);
     try {
       await onTopUp(amount);
-      setTopUpStatus(`✅ Added ${amount} XLM to your account`);
       setTransactions((prev) => [
         ...prev,
         { type: "topup", amount, timestamp: Date.now() },
       ]);
-      setTimeout(() => setTopUpStatus(""), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Top-up failed");
-      setTopUpStatus(`❌ Top-up failed`);
-      setTimeout(() => setTopUpStatus(""), 3000);
     } finally {
       setLoading(false);
     }

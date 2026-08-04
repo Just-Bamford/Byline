@@ -310,8 +310,9 @@ export default function App() {
       setWalletKey(key);
       setScreen("wallet");
       setStatusMsg("Wallet connected!");
-    } catch (err: any) {
-      setStatusMsg(`Error: ${err.message}`);
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      setStatusMsg(`Error: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -325,8 +326,9 @@ export default function App() {
       await fundFromFriendbot(walletKey);
       await refreshBalance(walletKey);
       setStatusMsg("✓ Funded with 10,000 testnet XLM");
-    } catch (err: any) {
-      setStatusMsg(`Funding failed: ${err.message}`);
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      setStatusMsg(`Funding failed: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -344,8 +346,9 @@ export default function App() {
         setStatusMsg(`✓ Access granted! Tx: ${result.txHash.slice(0, 12)}...`);
         await refreshBalance(walletKey);
       }
-    } catch (err: any) {
-      setStatusMsg(`Purchase failed: ${err.message}`);
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      setStatusMsg(`Purchase failed: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -748,93 +751,105 @@ export default function App() {
             {/* Render structured article content */}
             <div style={{ lineHeight: 1.8, fontSize: 16 }}>
               {Array.isArray(activeArticle.content) &&
-                activeArticle.content.map((section: any, idx: number) => {
-                  if (section.type === "intro") {
-                    return (
-                      <p
-                        key={idx}
-                        style={{
-                          fontSize: 18,
-                          fontWeight: 500,
-                          color: "#222",
-                          marginBottom: "1.5rem",
-                          lineHeight: 1.7,
-                        }}
-                      >
-                        {section.text}
-                      </p>
-                    );
-                  }
-                  if (section.type === "heading") {
-                    return (
-                      <h2
-                        key={idx}
-                        style={{
-                          fontSize: 22,
-                          fontWeight: 700,
-                          color: "#111",
-                          marginTop: "2rem",
-                          marginBottom: "1rem",
-                          lineHeight: 1.3,
-                        }}
-                      >
-                        {section.text}
-                      </h2>
-                    );
-                  }
-                  if (section.type === "subheading") {
-                    return (
-                      <p
-                        key={idx}
-                        style={{
-                          fontSize: 16,
-                          fontWeight: 600,
-                          color: "#222",
-                          marginTop: "1.25rem",
-                          marginBottom: "0.75rem",
-                        }}
-                      >
-                        {section.text}
-                      </p>
-                    );
-                  }
-                  if (section.type === "paragraph") {
-                    return (
-                      <p
-                        key={idx}
-                        style={{
-                          color: "#333",
-                          marginBottom: "1.25rem",
-                          lineHeight: 1.8,
-                        }}
-                      >
-                        {section.text}
-                      </p>
-                    );
-                  }
-                  if (section.type === "list") {
-                    return (
-                      <ul
-                        key={idx}
-                        style={{
-                          marginBottom: "1.5rem",
-                          marginLeft: "1.5rem",
-                          color: "#333",
-                        }}
-                      >
-                        {section.items.map((item: string, i: number) => (
-                          <li
-                            key={i}
-                            style={{ marginBottom: "0.5rem", lineHeight: 1.7 }}
-                          >
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    );
-                  }
-                  return null;
-                })}
+                activeArticle.content.map(
+                  (
+                    section: {
+                      type: string;
+                      text?: string;
+                      items?: string[];
+                    },
+                    idx: number,
+                  ) => {
+                    if (section.type === "intro") {
+                      return (
+                        <p
+                          key={idx}
+                          style={{
+                            fontSize: 18,
+                            fontWeight: 500,
+                            color: "#222",
+                            marginBottom: "1.5rem",
+                            lineHeight: 1.7,
+                          }}
+                        >
+                          {section.text}
+                        </p>
+                      );
+                    }
+                    if (section.type === "heading") {
+                      return (
+                        <h2
+                          key={idx}
+                          style={{
+                            fontSize: 22,
+                            fontWeight: 700,
+                            color: "#111",
+                            marginTop: "2rem",
+                            marginBottom: "1rem",
+                            lineHeight: 1.3,
+                          }}
+                        >
+                          {section.text}
+                        </h2>
+                      );
+                    }
+                    if (section.type === "subheading") {
+                      return (
+                        <p
+                          key={idx}
+                          style={{
+                            fontSize: 16,
+                            fontWeight: 600,
+                            color: "#222",
+                            marginTop: "1.25rem",
+                            marginBottom: "0.75rem",
+                          }}
+                        >
+                          {section.text}
+                        </p>
+                      );
+                    }
+                    if (section.type === "paragraph") {
+                      return (
+                        <p
+                          key={idx}
+                          style={{
+                            color: "#333",
+                            marginBottom: "1.25rem",
+                            lineHeight: 1.8,
+                          }}
+                        >
+                          {section.text}
+                        </p>
+                      );
+                    }
+                    if (section.type === "list") {
+                      return (
+                        <ul
+                          key={idx}
+                          style={{
+                            marginBottom: "1.5rem",
+                            marginLeft: "1.5rem",
+                            color: "#333",
+                          }}
+                        >
+                          {section.items.map((item: string, i: number) => (
+                            <li
+                              key={i}
+                              style={{
+                                marginBottom: "0.5rem",
+                                lineHeight: 1.7,
+                              }}
+                            >
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      );
+                    }
+                    return null;
+                  },
+                )}
             </div>
           </div>
         )}
