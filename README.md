@@ -224,7 +224,27 @@ Health check.
 
 ---
 
-## Quick Start
+## 📚 Documentation
+
+**New to Byline?** Start here:
+
+- 👉 **[DEMO.md](DEMO.md)** - 5-minute interactive walkthrough (testnet demo locally)
+- 📖 **[README](README.md)** - Project overview & architecture
+- 🚀 **[TESTNET.md](TESTNET.md)** - How to deploy contract to Stellar testnet
+- 🌐 **[DEPLOYMENT.md](docs/DEPLOYMENT.md)** - Production deployment (Vercel, Railway, Docker)
+- 🔌 **[INTEGRATION.md](docs/INTEGRATION.md)** - Publisher integration guide
+- 📋 **[PROTOCOL.md](docs/PROTOCOL.md)** - Technical specification & security model
+- 🧪 **[E2E_TESTING.md](docs/E2E_TESTING.md)** - End-to-end testing guide
+- 📝 **[RELEASES.md](docs/RELEASES.md)** - Release notes & progress tracking
+
+**For Developers:**
+
+- [CONTRACT.md](contract/README.md) - Smart contract reference
+- [BACKEND.md](publisher-backend/README.md) - API documentation
+- [FRONTEND.md](reader-app/README.md) - React app setup
+- [SDK.md](publisher-sdk/README.md) - TypeScript SDK usage
+
+---
 
 ### Using Docker Compose (Recommended)
 
