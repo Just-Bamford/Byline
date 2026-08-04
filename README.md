@@ -300,52 +300,78 @@ For comprehensive E2E testing guide, see [`docs/E2E_TESTING.md`](docs/E2E_TESTIN
 
 ---
 
-## Testnet Deployment
+## 🧪 Demo & Testnet
 
-Byline Phase 1 is ready for testnet deployment. The contract, backend API, and reader app have been developed and tested locally. Deployment requires:
+### Live Demo Walkthrough
 
-1. **Contract Deployment** - Deploy compiled Soroban contract to testnet
-2. **Backend Deployment** - Host publisher API on cloud infrastructure
-3. **Frontend Deployment** - Serve reader app from CDN or static host
-4. **Monitoring** - Set up error tracking and analytics
+**Want to see Byline in action?** Follow the interactive demo guide:
 
-For the complete deployment guide, see [`docs/TESTNET_RELEASE.md`](docs/TESTNET_RELEASE.md).
+👉 **[DEMO.md](DEMO.md)** - Complete 5-minute walkthrough showing:
+
+- Connect Freighter wallet
+- Fund testnet wallet via Friendbot
+- Purchase article access with real XLM
+- Read unlocked article
+- View transaction on Stellar Expert
+
+All steps are reproducible locally. No testnet contract ID needed yet.
+
+### Testnet Deployment Guide
+
+**Ready to deploy to Stellar testnet?** See the complete deployment guide:
+
+👉 **[TESTNET.md](TESTNET.md)** - Step-by-step instructions for:
+
+- Building the Soroban contract
+- Deploying to Stellar testnet
+- Getting a real contract ID
+- Running purchase/verify transactions
+- Viewing on Stellar Expert explorer
+- Troubleshooting deployment issues
 
 ### Testnet Status
 
-| Component         | Status                                | Link                                                       |
-| ----------------- | ------------------------------------- | ---------------------------------------------------------- |
-| Contract          | Ready to Deploy                       | Compiled WASM ready (see `contract/README.md`)             |
-| Reader App        | Ready to Deploy                       | Built production bundle (see `reader-app/README.md`)       |
-| Publisher Backend | Ready to Deploy                       | Docker image available (see `publisher-backend/README.md`) |
-| Publisher SDK     | Ready to Deploy                       | Published to npm (see `publisher-sdk/README.md`)           |
-| Contract ID       | Pending                               | Will be assigned after testnet deployment                  |
-| RPC Endpoint      | `https://soroban-testnet.stellar.org` | Soroban testnet RPC server                                 |
+| Component         | Status                       | Link                                                         |
+| ----------------- | ---------------------------- | ------------------------------------------------------------ |
+| Contract          | Built & Ready to Deploy      | [`contract/README.md`](contract/README.md)                   |
+| Reader App        | Ready to Deploy              | [`reader-app/README.md`](reader-app/README.md)               |
+| Publisher Backend | Ready to Deploy              | [`publisher-backend/README.md`](publisher-backend/README.md) |
+| Publisher SDK     | Ready to Deploy              | [`publisher-sdk/README.md`](publisher-sdk/README.md)         |
+| **Demo Guide**    | **Available Now**            | **👉 [DEMO.md](DEMO.md)**                                    |
+| **Deploy Guide**  | **Available Now**            | **👉 [TESTNET.md](TESTNET.md)**                              |
+| Contract ID       | Coming Soon (deploy testnet) | Will update after deployment                                 |
+| Stellar Expert    | Testnet Explorer             | https://testnet.stellar.expert                               |
 
 ### Deployment Checklist
 
 ```
-Pre-deployment:
+Setup:
+  ☐ Read DEMO.md and run locally first
+  ☐ Read TESTNET.md for deployment steps
   ☐ Rust & Soroban CLI installed
   ☐ Testnet account created and funded
-  ☐ All tests passing locally
-  ☐ Security review completed
 
 Deployment:
   ☐ Contract deployed to testnet
-  ☐ Contract ID saved to .env files
-  ☐ Backend API deployed
-  ☐ Reader app deployed to static host
-  ☐ Health checks passing
+  ☐ Real contract ID obtained
+  ☐ Backend API deployed to cloud
+  ☐ Reader app deployed to CDN
+  ☐ All endpoints accessible and tested
 
-Post-deployment:
-  ☐ Contract operations tested end-to-end
-  ☐ Monitoring and alerting configured
-  ☐ Documentation updated with live contract ID
-  ☐ Public testnet launch announced
+Verification:
+  ☐ Purchase transaction on Stellar Expert
+  ☐ Token verification working
+  ☐ Analytics endpoints responding
+  ☐ Health checks passing
 ```
 
-To deploy, follow the step-by-step guide in [`docs/TESTNET_RELEASE.md`](docs/TESTNET_RELEASE.md).
+### Next: Live Hosted Demo
+
+Coming soon:
+
+- Reader app at `https://byline-reader.vercel.app`
+- Backend API at `https://byline-api.railway.app`
+- Real contract ID and transactions viewable on Stellar Expert
 
 ---
 
