@@ -1,17 +1,33 @@
 #![no_std]
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short,
-    Address, Env, String,
+    Address, Env, String, token,
 };
 
-// ── Storage key types ──────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────
+
+/// Circle USDC on Stellar testnet/mainnet
+/// GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN
+pub const USDC_ADDRESS: &str = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN";
+
+/// Price type enum for flexibility
+#[contracttype]
+#[derive(Clone)]
+pub enum PriceType {
+    Stroops,  // Native XLM in stroops
+    USDC,     // USD Coin via Circle anchor (in cents)
+}
+
+// ── Storage key types ──────────────────────────────────────────────────
 
 #[contracttype]
 pub enum DataKey {
-    ArticlePrice(String),       // article_id → i128 price in stroops
-    AccessRecord(Address, String), // (reader, article_id) → expiry timestamp
-    PublisherWallet(String),    // article_id → publisher Address
-    TotalReads,                 // global read counter
+    ArticlePrice(String),              // article_id → i128 price in stroops/cents
+    ArticlePriceType(String),          // article_id → PriceType (Stroops or USDC)
+    AccessRecord(Address, String),     // (reader, article_id) → expiry timestamp
+    PublisherWallet(String),           // article_id → publisher Address
+    TotalReads,                        // global read counter
+    ContractUSDCAddress,               // USDC token contract address
 }
 
 // ── Return types ───────────────────────────────────────────────────
@@ -57,14 +73,50 @@ impl BylineContract {
             &price,
         );
         env.storage().persistent().set(
+            &DataKey::ArticlePriceType(article_id.clone()),
+            &PriceType::Stroops,
+        );
+        env.storage().persistent().set(
             &DataKey::PublisherWallet(article_id),
             &publisher,
         );
     }
 
-    /// Purchase access to an article.
-    /// Deducts the article price from the reader's balance and issues an
-    /// access token valid for 24 hours.
+    /// Register an article with USDC pricing (in cents).
+    /// Publishers set stable prices in USD cents (e.g., 299 = $2.99).
+    /// Must be called by the publisher before readers can purchase.
+    pub fn register_article_usdc(
+        env: Env,
+        article_id: String,
+        price_cents: i128,
+        publisher: Address,
+        usdc_contract: Address,
+    ) {
+        publisher.require_auth();
+        assert!(price_cents > 0, "price must be positive");
+        assert!(price_cents <= 10_000_00, "price exceeds maximum ($10,000)");
+
+        env.storage().persistent().set(
+            &DataKey::ArticlePrice(article_id.clone()),
+            &price_cents,
+        );
+        env.storage().persistent().set(
+            &DataKey::ArticlePriceType(article_id.clone()),
+            &PriceType::USDC,
+        );
+        env.storage().persistent().set(
+            &DataKey::PublisherWallet(article_id.clone()),
+            &publisher,
+        );
+        env.storage().persistent().set(
+            &DataKey::ContractUSDCAddress,
+            &usdc_contract,
+        );
+    }
+
+    /// Purchase access to an article in stroops or USDC.
+    /// For USDC articles: transfers USDC from reader to publisher via SEP-41 token interface.
+    /// For stroops articles: backend handles native XLM transfer.
     pub fn purchase_access(
         env: Env,
         reader: Address,
@@ -79,10 +131,37 @@ impl BylineContract {
             .get(&price_key)
             .expect("article not registered");
 
-        // Transfer native XLM from reader to contract
-        // Note: In production this uses the native XLM SAC address.
-        // For testnet, the publisher backend handles the actual transfer
-        // via Stellar operations; the contract records the access grant.
+        let price_type_key = DataKey::ArticlePriceType(article_id.clone());
+        let price_type: PriceType = env
+            .storage()
+            .persistent()
+            .get(&price_type_key)
+            .unwrap_or(PriceType::Stroops);
+
+        // Handle USDC payment via token interface (SEP-41)
+        if let PriceType::USDC = price_type {
+            let publisher = env
+                .storage()
+                .persistent()
+                .get::<DataKey, Address>(&DataKey::PublisherWallet(article_id.clone()))
+                .expect("publisher not found");
+
+            let usdc_contract: Address = env
+                .storage()
+                .persistent()
+                .get(&DataKey::ContractUSDCAddress)
+                .expect("USDC contract not configured");
+
+            // Transfer USDC from reader to publisher
+            // Uses Soroban token interface (SEP-41)
+            // USDC has 6 decimal places, so convert cents to native units
+            // price_cents = 299 → 299 * 10^4 = 2,990,000 stroops of USDC
+            let usdc_amount = price * 10_000; // cents to USDC units (6 decimals)
+
+            let usdc_client = token::Client::new(&env, &usdc_contract);
+            usdc_client.transfer(&reader, &publisher, &usdc_amount);
+        }
+        // For stroops: backend handles payment, contract just records access
 
         let now = env.ledger().timestamp();
         let expires_at = now + 86_400; // 24 hours
@@ -100,10 +179,14 @@ impl BylineContract {
             .instance()
             .set(&DataKey::TotalReads, &(reads + 1));
 
-        // Emit event
+        // Emit event with price type
+        let price_type_str = match &price_type {
+            PriceType::Stroops => String::from_slice(&env, "stroops"),
+            PriceType::USDC => String::from_slice(&env, "usdc"),
+        };
         env.events().publish(
             (symbol_short!("purchase"), article_id.clone()),
-            (reader.clone(), price),
+            (reader.clone(), price, price_type_str),
         );
 
         AccessToken {
@@ -165,6 +248,36 @@ impl BylineContract {
         env.storage()
             .persistent()
             .get(&DataKey::PublisherWallet(article_id))
+    }
+
+    /// Get the price type (Stroops or USDC) for an article.
+    pub fn get_price_type(env: Env, article_id: String) -> PriceType {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ArticlePriceType(article_id))
+            .unwrap_or(PriceType::Stroops)
+    }
+
+    /// Get the USDC contract address configured for this contract.
+    pub fn get_usdc_contract(env: Env) -> Option<Address> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ContractUSDCAddress)
+    }
+
+    /// Set the USDC contract address for this instance.
+    /// Can only be called once during initialization.
+    pub fn set_usdc_contract(env: Env, usdc_contract: Address) {
+        let existing: Option<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ContractUSDCAddress);
+        assert!(existing.is_none(), "USDC contract already set");
+        
+        env.storage().persistent().set(
+            &DataKey::ContractUSDCAddress,
+            &usdc_contract,
+        );
     }
 }
 
@@ -251,5 +364,128 @@ mod test {
         client.purchase_access(&reader1, &article_id);
         client.purchase_access(&reader2, &article_id);
         assert_eq!(client.get_total_reads(), 2);
+    }
+
+    #[test]
+    fn test_register_article_usdc() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let usdc_contract = Address::generate(&env);
+        let article_id = String::from_str(&env, "usdc-article-001");
+
+        // Register article with USDC pricing: $2.99 = 299 cents
+        client.register_article_usdc(&article_id, &299, &publisher, &usdc_contract);
+
+        assert_eq!(client.get_article_price(&article_id), 299);
+        
+        // Verify price type is USDC
+        let price_type = client.get_price_type(&article_id);
+        match price_type {
+            PriceType::USDC => {},
+            _ => panic!("Expected USDC price type"),
+        }
+    }
+
+    #[test]
+    fn test_get_price_type_defaults_to_stroops() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let article_id = String::from_str(&env, "stroops-article");
+
+        // Register with stroops (legacy)
+        client.register_article(&article_id, &20_000, &publisher);
+
+        // Price type should default to Stroops
+        let price_type = client.get_price_type(&article_id);
+        match price_type {
+            PriceType::Stroops => {},
+            _ => panic!("Expected Stroops price type"),
+        }
+    }
+
+    #[test]
+    fn test_set_usdc_contract_address() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let usdc_contract = Address::generate(&env);
+
+        // Set USDC contract address
+        client.set_usdc_contract(&usdc_contract);
+
+        // Verify it's set
+        let retrieved = client.get_usdc_contract();
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap(), usdc_contract);
+    }
+
+    #[test]
+    #[should_panic(expected = "USDC contract already set")]
+    fn test_set_usdc_contract_only_once() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let usdc_contract1 = Address::generate(&env);
+        let usdc_contract2 = Address::generate(&env);
+
+        // Set first time
+        client.set_usdc_contract(&usdc_contract1);
+
+        // Try to set second time - should panic
+        client.set_usdc_contract(&usdc_contract2);
+    }
+
+    #[test]
+    #[should_panic(expected = "price exceeds maximum")]
+    fn test_usdc_price_maximum_validation() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let usdc_contract = Address::generate(&env);
+        let article_id = String::from_str(&env, "expensive-article");
+
+        // Try to register with price > $10,000 (1,000,000 cents)
+        client.register_article_usdc(&article_id, &1_000_001, &publisher, &usdc_contract);
+    }
+
+    #[test]
+    fn test_usdc_price_range_validation() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let usdc_contract = Address::generate(&env);
+
+        // Test $0.01 (minimum)
+        let article1 = String::from_str(&env, "cheap-article");
+        client.register_article_usdc(&article1, &1, &publisher, &usdc_contract);
+        assert_eq!(client.get_article_price(&article1), 1);
+
+        // Test $10,000 (maximum)
+        let article2 = String::from_str(&env, "expensive-article");
+        client.register_article_usdc(&article2, &1_000_000, &publisher, &usdc_contract);
+        assert_eq!(client.get_article_price(&article2), 1_000_000);
+
+        // Test medium price: $4.99
+        let article3 = String::from_str(&env, "medium-article");
+        client.register_article_usdc(&article3, &499, &publisher, &usdc_contract);
+        assert_eq!(client.get_article_price(&article3), 499);
     }
 }
