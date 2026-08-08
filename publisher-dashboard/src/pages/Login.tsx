@@ -41,21 +41,57 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-lg shadow-xl p-8">
+    <div
+      style={{
+        minHeight: "100vh",
+        backgroundImage:
+          "linear-gradient(to bottom right, rgb(37, 99, 235), rgb(29, 78, 216))",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "1rem",
+      }}
+    >
+      <div style={{ width: "100%", maxWidth: "28rem" }}>
+        <div
+          style={{
+            backgroundColor: "white",
+            borderRadius: "0.5rem",
+            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
+            padding: "2rem",
+          }}
+        >
           {/* Logo/Title */}
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Byline</h1>
-            <p className="mt-2 text-gray-600">Publisher Dashboard</p>
+          <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+            <h1
+              style={{
+                fontSize: "1.875rem",
+                fontWeight: "bold",
+                color: "#111827",
+              }}
+            >
+              Byline
+            </h1>
+            <p style={{ marginTop: "0.5rem", color: "#4b5563" }}>
+              Publisher Dashboard
+            </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form
+            onSubmit={handleSubmit}
+            style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}
+          >
             <div>
               <label
                 htmlFor="address"
-                className="block text-sm font-medium text-gray-700 mb-2"
+                style={{
+                  display: "block",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                  color: "#374151",
+                  marginBottom: "0.5rem",
+                }}
               >
                 Stellar Address
               </label>
@@ -66,18 +102,53 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
                 onChange={(e) => setPublisherAddress(e.target.value)}
                 placeholder="GABC...XYZ"
                 disabled={isLoading}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:cursor-not-allowed font-mono text-sm"
+                style={{
+                  width: "100%",
+                  padding: "0.5rem 1rem",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "0.375rem",
+                  fontFamily: "monospace",
+                  fontSize: "0.875rem",
+                  opacity: isLoading ? 0.5 : 1,
+                  cursor: isLoading ? "not-allowed" : "auto",
+                }}
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p
+                style={{
+                  marginTop: "0.25rem",
+                  fontSize: "0.75rem",
+                  color: "#6b7280",
+                }}
+              >
                 Your Stellar account that publishes articles
               </p>
             </div>
 
             {/* Error Message */}
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-                <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-red-800">{error}</p>
+              <div
+                style={{
+                  padding: "0.75rem",
+                  backgroundColor: "#fef2f2",
+                  border: "1px solid #fecaca",
+                  borderRadius: "0.375rem",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "0.5rem",
+                }}
+              >
+                <AlertCircle
+                  style={{
+                    height: "1.25rem",
+                    width: "1.25rem",
+                    color: "#dc2626",
+                    flexShrink: 0,
+                    marginTop: "0.125rem",
+                  }}
+                />
+                <p style={{ fontSize: "0.875rem", color: "#991b1b" }}>
+                  {error}
+                </p>
               </div>
             )}
 
@@ -85,16 +156,49 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+              style={{
+                width: "100%",
+                backgroundColor: isLoading ? "#9ca3af" : "#2563eb",
+                color: "white",
+                fontWeight: "600",
+                padding: "0.5rem",
+                borderRadius: "0.375rem",
+                cursor: isLoading ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.5rem",
+                border: "none",
+              }}
             >
-              {isLoading && <Loader className="h-4 w-4 animate-spin" />}
+              {isLoading && (
+                <Loader
+                  style={{
+                    height: "1rem",
+                    width: "1rem",
+                    animation: "spin 1s linear infinite",
+                  }}
+                />
+              )}
               {isLoading ? "Connecting..." : "Connect Wallet"}
             </button>
           </form>
 
           {/* Info */}
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <p className="text-xs text-gray-600 text-center">
+          <div
+            style={{
+              marginTop: "2rem",
+              paddingTop: "1.5rem",
+              borderTop: "1px solid #e5e7eb",
+            }}
+          >
+            <p
+              style={{
+                fontSize: "0.75rem",
+                color: "#4b5563",
+                textAlign: "center",
+              }}
+            >
               Connect with your Stellar account to manage your published
               articles, track earnings, and register new content.
             </p>
@@ -102,10 +206,18 @@ export const LoginPage: React.FC<LoginPageProps> = () => {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-white text-xs mt-8">
-          © 2024 Byline. A decentralized publishing platform on Stellar.
+        <p
+          style={{
+            textAlign: "center",
+            color: "white",
+            fontSize: "0.75rem",
+            marginTop: "2rem",
+          }}
+        >
+          © 2026 Byline. A decentralized publishing platform on Stellar.
         </p>
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 };

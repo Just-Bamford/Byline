@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { Dashboard } from "./pages/Dashboard";
 import { LoginPage } from "./pages/Login";
 
 export const App: React.FC = () => {
@@ -7,23 +6,37 @@ export const App: React.FC = () => {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   useEffect(() => {
-    // Check if user is already authenticated
-    const token = localStorage.getItem("auth_token");
-    const address = localStorage.getItem("publisher_address");
+    try {
+      // Check if user is already authenticated
+      const token = localStorage.getItem("auth_token");
+      const address = localStorage.getItem("publisher_address");
 
-    setIsAuthenticated(!!(token && address));
-    setIsCheckingAuth(false);
+      setIsAuthenticated(!!(token && address));
+    } catch (e) {
+      console.error("Auth check error:", e);
+    } finally {
+      setIsCheckingAuth(false);
+    }
   }, []);
 
   if (isCheckingAuth) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
+      <div
+        style={{
+          minHeight: "100vh",
+          backgroundColor: "#f3f4f6",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div style={{ color: "#4b5563" }}>Loading...</div>
       </div>
     );
   }
 
-  return isAuthenticated ? <Dashboard /> : <LoginPage />;
+  // For now, always show login page
+  return <LoginPage />;
 };
 
 export default App;
