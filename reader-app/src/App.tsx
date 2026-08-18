@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import {
-  isFreighterInstalled,
-  connectFreighter,
-  getBalance,
-  fundFromFriendbot,
-  purchaseArticle,
-} from "./lib/wallet";
+import { AuthProvider, useAuth } from "./lib/authContext";
+import { getBalance, fundFromFriendbot, purchaseArticle } from "./lib/wallet";
 import { verifyAccess, recordRead } from "./lib/api";
+import { LoginPage } from "./components/LoginPage";
+import { MagicLinkVerify } from "./components/MagicLinkVerify";
+import { ManagedWalletIndicator } from "./components/ManagedWalletIndicator";
+import { WalletExportFlow } from "./components/WalletExportFlow";
 
 // ── Sample articles (replace with real publisher API in Phase 2) ──
 
@@ -272,11 +271,15 @@ const SAMPLE_ARTICLES = [
 
 type Screen = "home" | "wallet" | "article";
 
-export default function App() {
+interface AppContentProps {
+  walletAddress: string;
+}
+
+function AppContent({ walletAddress }: AppContentProps) {
+  const { logout, walletType } = useAuth();
+  const [showExport, setShowExport] = useState(false);
   const [screen, setScreen] = useState<Screen>("home");
-  const [walletKey, setWalletKey] = useState<string | null>(null);
   const [balance, setBalance] = useState<string>("0.0000");
-  const [freighterAvailable, setFreighterAvailable] = useState(false);
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   // Pre-unlock first article for demo purposes
@@ -287,11 +290,6 @@ export default function App() {
     (typeof SAMPLE_ARTICLES)[0] | null
   >(null);
 
-  // Check Freighter on mount
-  useEffect(() => {
-    isFreighterInstalled().then(setFreighterAvailable);
-  }, []);
-
   // Refresh balance when wallet connects
   const refreshBalance = useCallback(async (key: string) => {
     const bal = await getBalance(key);
@@ -299,32 +297,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (walletKey) refreshBalance(walletKey);
-  }, [walletKey, refreshBalance]);
-
-  async function handleConnectFreighter() {
-    setLoading(true);
-    setStatusMsg(null);
-    try {
-      const key = await connectFreighter();
-      setWalletKey(key);
-      setScreen("wallet");
-      setStatusMsg("Wallet connected!");
-    } catch (err: unknown) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setStatusMsg(`Error: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  }
+    if (walletAddress) refreshBalance(walletAddress);
+  }, [walletAddress, refreshBalance]);
 
   async function handleFundWallet() {
-    if (!walletKey) return;
+    if (!walletAddress) return;
     setLoading(true);
     setStatusMsg("Requesting testnet XLM from Friendbot...");
     try {
-      await fundFromFriendbot(walletKey);
-      await refreshBalance(walletKey);
+      await fundFromFriendbot(walletAddress);
+      await refreshBalance(walletAddress);
       setStatusMsg("✓ Funded with 10,000 testnet XLM");
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -335,16 +317,16 @@ export default function App() {
   }
 
   async function handlePurchase(article: (typeof SAMPLE_ARTICLES)[0]) {
-    if (!walletKey) return;
+    if (!walletAddress) return;
     setLoading(true);
     setStatusMsg(`Purchasing access to "${article.title}"...`);
     try {
-      const result = await purchaseArticle(walletKey, article.id);
+      const result = await purchaseArticle(walletAddress, article.id);
       if (result.success) {
-        await recordRead(article.id, walletKey, article.price);
+        await recordRead(article.id, walletAddress, article.price);
         setUnlockedArticles((prev) => new Set([...prev, article.id]));
         setStatusMsg(`✓ Access granted! Tx: ${result.txHash.slice(0, 12)}...`);
-        await refreshBalance(walletKey);
+        await refreshBalance(walletAddress);
       }
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -362,7 +344,7 @@ export default function App() {
       return;
     }
 
-    if (!walletKey) {
+    if (!walletAddress) {
       setStatusMsg("Connect your wallet to purchase articles");
       return;
     }
@@ -371,7 +353,7 @@ export default function App() {
     setLoading(true);
     setStatusMsg("Checking on-chain access...");
     try {
-      const hasAccess = await verifyAccess(walletKey, article.id);
+      const hasAccess = await verifyAccess(walletAddress, article.id);
       if (hasAccess) {
         setUnlockedArticles((prev) => new Set([...prev, article.id]));
         setActiveArticle(article);
@@ -394,8 +376,8 @@ export default function App() {
 
   // ── Render ───────────────────────────────────────────────────────
 
-  const headerKey = walletKey
-    ? `${walletKey.slice(0, 6)}...${walletKey.slice(-4)}`
+  const headerKey = walletAddress
+    ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
     : null;
 
   return (
@@ -441,7 +423,7 @@ export default function App() {
             Byline
           </button>
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            {walletKey ? (
+            {walletAddress ? (
               <>
                 <span style={{ fontSize: 13, color: "#666" }}>
                   {balance} XLM
@@ -470,10 +452,23 @@ export default function App() {
                 >
                   Wallet
                 </button>
+                <button
+                  onClick={() => logout()}
+                  style={{
+                    fontSize: 13,
+                    background: "none",
+                    border: "1px solid #ddd",
+                    padding: "4px 12px",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                  }}
+                >
+                  Logout
+                </button>
               </>
             ) : (
               <button
-                onClick={handleConnectFreighter}
+                onClick={() => logout()}
                 disabled={loading}
                 style={{
                   fontSize: 13,
@@ -485,7 +480,7 @@ export default function App() {
                   cursor: "pointer",
                 }}
               >
-                Connect Wallet
+                Logout
               </button>
             )}
           </div>
@@ -538,26 +533,10 @@ export default function App() {
                 when you want. Fractions of a cent per article. No subscription.
                 No ads.
               </p>
-              {!walletKey && (
-                <div style={{ marginTop: "1.5rem", display: "flex", gap: 12 }}>
-                  <button
-                    onClick={handleConnectFreighter}
-                    disabled={loading}
-                    style={{
-                      background: "#111",
-                      color: "#fff",
-                      border: "none",
-                      padding: "10px 20px",
-                      borderRadius: 8,
-                      fontSize: 14,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {freighterAvailable
-                      ? "Connect Freighter"
-                      : "Install Freighter"}
-                  </button>
-                </div>
+              {walletAddress && walletType === "custodial" && (
+                <ManagedWalletIndicator
+                  onOpenExport={() => setShowExport(true)}
+                />
               )}
             </div>
 
@@ -636,7 +615,7 @@ export default function App() {
         )}
 
         {/* Wallet screen */}
-        {screen === "wallet" && walletKey && (
+        {screen === "wallet" && walletAddress && (
           <div style={{ maxWidth: 480 }}>
             <h2
               style={{ fontSize: 22, fontWeight: 600, marginBottom: "1.5rem" }}
@@ -663,7 +642,7 @@ export default function App() {
                   wordBreak: "break-all",
                 }}
               >
-                {walletKey}
+                {walletAddress}
               </p>
             </div>
             <div
@@ -855,5 +834,84 @@ export default function App() {
         )}
       </main>
     </div>
+  );
+}
+
+// ── Wrapper component that uses auth context ──
+
+function AppWithAuth() {
+  const auth = useAuth();
+  const [showExport, setShowExport] = useState(false);
+
+  // Check if there's a magic link token in the URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const magicLinkToken = urlParams.get("token");
+
+  if (magicLinkToken) {
+    return (
+      <MagicLinkVerify
+        token={magicLinkToken}
+        onSuccess={() => {
+          // Remove token from URL
+          window.history.replaceState(
+            {},
+            document.title,
+            window.location.pathname,
+          );
+        }}
+      />
+    );
+  }
+
+  // Show login page if not authenticated and not loading
+  if (!auth.isAuthenticated && !auth.isLoading) {
+    return <LoginPage onSuccess={() => {}} />;
+  }
+
+  // Show loading state
+  if (auth.isLoading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#fafaf8",
+        }}
+      >
+        <div
+          style={{
+            display: "inline-block",
+            width: 32,
+            height: 32,
+            border: "3px solid #e5e5e5",
+            borderTop: "3px solid #111",
+            borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <AppContent walletAddress={auth.walletAddress || ""} />
+      {showExport && <WalletExportFlow onClose={() => setShowExport(false)} />}
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppWithAuth />
+    </AuthProvider>
   );
 }
