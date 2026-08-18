@@ -140,3 +140,39 @@ export async function purchaseArticle(
 
   throw new Error(`Transaction failed: ${result.status}`);
 }
+
+/**
+ * For custodial wallets: Submit a purchase request to the backend.
+ * The backend signs and submits the transaction on behalf of the user.
+ */
+export async function custodialPurchaseArticle(
+  walletAddress: string,
+  articleId: string,
+  sessionToken: string,
+): Promise<{ success: boolean; txHash: string }> {
+  const backendUrl =
+    import.meta.env.VITE_BACKEND_URL ?? "http://localhost:3000";
+
+  const resp = await fetch(`${backendUrl}/purchase`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify({
+      articleId,
+      walletAddress,
+    }),
+  });
+
+  if (!resp.ok) {
+    const error = await resp.json();
+    throw new Error(error.error || "Purchase failed");
+  }
+
+  const data = await resp.json();
+  return {
+    success: data.success,
+    txHash: data.txHash,
+  };
+}

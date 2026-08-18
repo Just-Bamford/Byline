@@ -1,7 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { AuthProvider } from "./lib/AuthProvider";
 import { useAuth } from "./lib/authContext";
-import { getBalance, fundFromFriendbot, purchaseArticle } from "./lib/wallet";
+import {
+  getBalance,
+  fundFromFriendbot,
+  purchaseArticle,
+  custodialPurchaseArticle,
+} from "./lib/wallet";
 import { verifyAccess, recordRead } from "./lib/api";
 import { LoginPage } from "./components/LoginPage";
 import { MagicLinkVerify } from "./components/MagicLinkVerify";
@@ -277,7 +282,7 @@ interface AppContentProps {
 }
 
 function AppContent({ walletAddress }: AppContentProps) {
-  const { logout, walletType } = useAuth();
+  const { logout, walletType, sessionToken } = useAuth();
   const [showExport, setShowExport] = useState(false);
   const [screen, setScreen] = useState<Screen>("home");
   const [balance, setBalance] = useState<string>("0.0000");
@@ -322,7 +327,23 @@ function AppContent({ walletAddress }: AppContentProps) {
     setLoading(true);
     setStatusMsg(`Purchasing access to "${article.title}"...`);
     try {
-      const result = await purchaseArticle(walletAddress, article.id);
+      let result;
+
+      // Handle custodial wallet purchases via backend
+      if (walletType === "custodial") {
+        if (!sessionToken) {
+          throw new Error("Session required for custodial wallet purchase");
+        }
+        result = await custodialPurchaseArticle(
+          walletAddress,
+          article.id,
+          sessionToken,
+        );
+      } else {
+        // Freighter wallet purchase
+        result = await purchaseArticle(walletAddress, article.id);
+      }
+
       if (result.success) {
         await recordRead(article.id, walletAddress, article.price);
         setUnlockedArticles((prev) => new Set([...prev, article.id]));
