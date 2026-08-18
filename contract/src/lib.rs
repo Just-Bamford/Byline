@@ -26,6 +26,8 @@ pub enum DataKey {
     ArticlePriceType(String),          // article_id → PriceType (Stroops or USDC)
     AccessRecord(Address, String),     // (reader, article_id) → expiry timestamp
     PublisherWallet(String),           // article_id → publisher Address
+    WriterAddr(String),                // article_id → optional writer Address
+    WriterSplit(String),               // article_id → writer's split percentage (0-100)
     TotalReads,                        // global read counter
     ContractUSDCAddress,               // USDC token contract address
     NFTAssetAddress(String),           // article_id → asset contract address for NFT
@@ -122,6 +124,91 @@ impl BylineContract {
         env.storage().persistent().set(
             &DataKey::ContractUSDCAddress,
             &usdc_contract,
+        );
+    }
+
+    /// Register an article with revenue split (XLM/stroops).
+    /// Writer receives writer_split_percent of each payment atomically in the same transaction.
+    /// Payments are split in the purchase_access function.
+    pub fn register_article_with_split(
+        env: Env,
+        article_id: String,
+        price: i128,
+        publisher: Address,
+        writer: Address,
+        writer_split_percent: u32,
+    ) {
+        publisher.require_auth();
+        assert!(price > 0, "price must be positive");
+        assert!(
+            writer_split_percent <= 100,
+            "writer_split_percent must be between 0 and 100"
+        );
+
+        env.storage().persistent().set(
+            &DataKey::ArticlePrice(article_id.clone()),
+            &price,
+        );
+        env.storage().persistent().set(
+            &DataKey::ArticlePriceType(article_id.clone()),
+            &PriceType::Stroops,
+        );
+        env.storage().persistent().set(
+            &DataKey::PublisherWallet(article_id.clone()),
+            &publisher,
+        );
+        env.storage().persistent().set(
+            &DataKey::WriterAddr(article_id.clone()),
+            &writer,
+        );
+        env.storage().persistent().set(
+            &DataKey::WriterSplit(article_id),
+            &writer_split_percent,
+        );
+    }
+
+    /// Register an article with revenue split (USDC).
+    /// Writer receives writer_split_percent of each payment atomically.
+    pub fn register_article_usdc_with_split(
+        env: Env,
+        article_id: String,
+        price_cents: i128,
+        publisher: Address,
+        usdc_contract: Address,
+        writer: Address,
+        writer_split_percent: u32,
+    ) {
+        publisher.require_auth();
+        assert!(price_cents > 0, "price must be positive");
+        assert!(price_cents <= 10_000_00, "price exceeds maximum ($10,000)");
+        assert!(
+            writer_split_percent <= 100,
+            "writer_split_percent must be between 0 and 100"
+        );
+
+        env.storage().persistent().set(
+            &DataKey::ArticlePrice(article_id.clone()),
+            &price_cents,
+        );
+        env.storage().persistent().set(
+            &DataKey::ArticlePriceType(article_id.clone()),
+            &PriceType::USDC,
+        );
+        env.storage().persistent().set(
+            &DataKey::PublisherWallet(article_id.clone()),
+            &publisher,
+        );
+        env.storage().persistent().set(
+            &DataKey::ContractUSDCAddress,
+            &usdc_contract,
+        );
+        env.storage().persistent().set(
+            &DataKey::WriterAddr(article_id.clone()),
+            &writer,
+        );
+        env.storage().persistent().set(
+            &DataKey::WriterSplit(article_id),
+            &writer_split_percent,
         );
     }
 
@@ -244,14 +331,41 @@ impl BylineContract {
                 .get(&DataKey::ContractUSDCAddress)
                 .expect("USDC contract not configured");
 
-            // Transfer USDC from reader to publisher
-            // Uses Soroban token interface (SEP-41)
-            // USDC has 6 decimal places, so convert cents to native units
-            // price_cents = 299 → 299 * 10^4 = 2,990,000 stroops of USDC
             let usdc_amount = price * 10_000; // cents to USDC units (6 decimals)
 
-            let usdc_client = token::Client::new(&env, &usdc_contract);
-            usdc_client.transfer(&reader, &publisher, &usdc_amount);
+            // Check if there's a writer split configured
+            let writer_split_opt: Option<u32> = env
+                .storage()
+                .persistent()
+                .get(&DataKey::WriterSplit(article_id.clone()));
+
+            if let Some(split_pct) = writer_split_opt {
+                // Split payment atomically between writer and publisher
+                let writer: Address = env
+                    .storage()
+                    .persistent()
+                    .get::<DataKey, Address>(&DataKey::WriterAddr(article_id.clone()))
+                    .expect("writer not found");
+
+                let writer_amount = (usdc_amount * split_pct as i128) / 100;
+                let publisher_amount = usdc_amount - writer_amount;
+
+                let usdc_client = token::Client::new(&env, &usdc_contract);
+                // Transfer writer's share
+                usdc_client.transfer(&reader, &writer, &writer_amount);
+                // Transfer publisher's share
+                usdc_client.transfer(&reader, &publisher, &publisher_amount);
+
+                // Emit split payment event
+                env.events().publish(
+                    (symbol_short!("split"), article_id.clone()),
+                    (writer, publisher, split_pct),
+                );
+            } else {
+                // No split: full payment to publisher
+                let usdc_client = token::Client::new(&env, &usdc_contract);
+                usdc_client.transfer(&reader, &publisher, &usdc_amount);
+            }
         }
         // For stroops: backend handles payment, contract just records access
 
@@ -381,6 +495,21 @@ impl BylineContract {
             &DataKey::ContractUSDCAddress,
             &usdc_contract,
         );
+    }
+
+    /// Get the writer address for an article (if configured with revenue split).
+    pub fn get_article_writer(env: Env, article_id: String) -> Option<Address> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::WriterAddr(article_id))
+    }
+
+    /// Get the writer split percentage for an article (if configured).
+    /// Returns the percentage (0-100) that the writer receives.
+    pub fn get_article_writer_split(env: Env, article_id: String) -> Option<u32> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::WriterSplit(article_id))
     }
 }
 
@@ -759,4 +888,103 @@ mod test {
         assert!(client.verify_token(&original_buyer, &article_id));
         assert!(client.verify_token(&secondary_buyer, &article_id));
     }
+
+    #[test]
+    fn test_revenue_split_with_stroops() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let writer = Address::generate(&env);
+        let reader = Address::generate(&env);
+        let article_id = String::from_str(&env, "split-stroops-article");
+
+        // Register article (XLM stroops) with revenue split: writer gets 30%
+        client.register_article_with_split(
+            &article_id,
+            &1_000_000, // 1 XLM
+            &publisher,
+            &writer,
+            &30, // 30% to writer
+        );
+
+        // Verify split was stored
+        assert_eq!(
+            client.get_article_writer(&article_id),
+            Some(writer.clone())
+        );
+        assert_eq!(client.get_article_writer_split(&article_id), Some(30u32));
+
+        // Verify article price
+        assert_eq!(client.get_article_price(&article_id), 1_000_000);
+
+        // Verify publisher
+        assert_eq!(
+            client.get_publisher(&article_id),
+            Some(publisher.clone())
+        );
+    }
+
+    #[test]
+    fn test_revenue_split_various_percentages() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+
+        // Test various split percentages
+        let test_cases = [
+            ("article-50-50", 50u32),
+            ("article-70-30", 30u32),
+            ("article-90-10", 10u32),
+            ("article-100-0", 0u32),
+        ];
+
+        for (article_id_str, split_pct) in &test_cases {
+            let article_id = String::from_str(&env, article_id_str);
+            let writer = Address::generate(&env);
+
+            client.register_article_with_split(
+                &article_id,
+                &500_000, // 0.5 XLM
+                &publisher,
+                &writer,
+                split_pct,
+            );
+
+            assert_eq!(
+                client.get_article_writer_split(&article_id),
+                Some(*split_pct)
+            );
+        }
+    }
+
+    #[test]
+    fn test_revenue_split_zero_percent() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let writer = Address::generate(&env);
+        let article_id = String::from_str(&env, "zero-split-article");
+
+        // Register with 0% to writer (all to publisher)
+        client.register_article_with_split(
+            &article_id,
+            &100_000,
+            &publisher,
+            &writer,
+            &0,
+        );
+
+        assert_eq!(client.get_article_writer_split(&article_id), Some(0u32));
+        assert_eq!(client.get_article_price(&article_id), 100_000);
+    }
 }
+
