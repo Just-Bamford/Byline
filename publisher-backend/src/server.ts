@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import * as dotenv from "dotenv";
 import { verifyAccess, getArticlePrice, getTotalReads } from "./stellar";
+import authRoutes from "./routes/authRoutes";
 
 dotenv.config();
 
@@ -195,6 +196,10 @@ app.get("/contract", (_req, res) => {
     explorerUrl: `https://stellar.expert/explorer/testnet/contract/${process.env.CONTRACT_ID}`,
   });
 });
+
+// ── Auth Routes ─────────────────────────────────────────────────────
+
+app.use("/auth", authRoutes);
 
 // ── Start ────────────────────────────────────────────────────────────
 
