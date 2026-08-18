@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { AuthProvider, useAuth } from "./lib/authContext";
+import { AuthProvider } from "./lib/AuthProvider";
+import { useAuth } from "./lib/authContext";
 import { getBalance, fundFromFriendbot, purchaseArticle } from "./lib/wallet";
 import { verifyAccess, recordRead } from "./lib/api";
 import { LoginPage } from "./components/LoginPage";
