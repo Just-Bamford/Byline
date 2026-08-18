@@ -287,7 +287,7 @@ function EmailSignup({ onBack }: EmailSignupProps) {
             lineHeight: 1.6,
           }}
         >
-          We've sent a magic link to <strong>{email}</strong>. Click it to
+          We&apos;ve sent a magic link to <strong>{email}</strong>. Click it to
           verify and create your managed wallet.
         </p>
         <p style={{ fontSize: 13, color: "#999", marginBottom: "1.5rem" }}>
@@ -368,7 +368,7 @@ function EmailSignup({ onBack }: EmailSignupProps) {
           style={{ cursor: "pointer" }}
         />
         <label htmlFor="new-user" style={{ cursor: "pointer" }}>
-          I'm creating an account for the first time
+          I&apos;m creating an account for the first time
         </label>
       </div>
 
@@ -466,8 +466,8 @@ function FreighterConnect({ onSuccess, onBack }: FreighterConnectProps) {
           lineHeight: 1.6,
         }}
       >
-        You'll be able to use your existing Stellar wallet to read articles on
-        Byline.
+        You&apos;ll be able to use your existing Stellar wallet to read articles
+        on Byline.
       </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

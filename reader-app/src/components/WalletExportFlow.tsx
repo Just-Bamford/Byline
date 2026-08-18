@@ -123,9 +123,9 @@ export function WalletExportFlow({ onClose }: WalletExportFlowProps) {
                 lineHeight: 1.6,
               }}
             >
-              Your keypair will be exported from Byline to Freighter. You'll
-              manage your Stellar wallet yourself, with full control and
-              responsibility.
+              Your keypair will be exported from Byline to Freighter.
+              You&apos;ll manage your Stellar wallet yourself, with full control
+              and responsibility.
             </p>
             <div
               style={{
@@ -461,7 +461,7 @@ export function WalletExportFlow({ onClose }: WalletExportFlowProps) {
               }}
             >
               <li>Open Freighter browser extension</li>
-              <li>Click "Add Account" or import option</li>
+              <li>Click &quot;Add Account&quot; or import option</li>
               <li>Paste your secret key when prompted</li>
               <li>Set a password to protect your Freighter wallet</li>
               <li>
@@ -482,7 +482,7 @@ export function WalletExportFlow({ onClose }: WalletExportFlowProps) {
               }}
             >
               <strong>Tip:</strong> After importing, Byline will no longer
-              manage your wallet. You're fully self-custody now.
+              manage your wallet. You&apos;re fully self-custody now.
             </div>
 
             <div style={{ display: "flex", gap: 10 }}>
@@ -500,7 +500,7 @@ export function WalletExportFlow({ onClose }: WalletExportFlowProps) {
                   cursor: "pointer",
                 }}
               >
-                I've imported to Freighter
+                I&apos;ve imported to Freighter
               </button>
               <button
                 onClick={() => setStep("keys")}

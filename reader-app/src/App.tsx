@@ -283,7 +283,6 @@ interface AppContentProps {
 
 function AppContent({ walletAddress }: AppContentProps) {
   const { logout, walletType, sessionToken } = useAuth();
-  const [showExport, setShowExport] = useState(false);
   const [screen, setScreen] = useState<Screen>("home");
   const [balance, setBalance] = useState<string>("0.0000");
   const [loading, setLoading] = useState(false);
@@ -557,7 +556,9 @@ function AppContent({ walletAddress }: AppContentProps) {
               </p>
               {walletAddress && walletType === "custodial" && (
                 <ManagedWalletIndicator
-                  onOpenExport={() => setShowExport(true)}
+                  onOpenExport={() => {
+                    /* Export handled in AppWithAuth */
+                  }}
                 />
               )}
             </div>
