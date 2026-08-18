@@ -1,8 +1,24 @@
 import express from "express";
 import cors from "cors";
 import * as dotenv from "dotenv";
+import { Request, Response } from "express";
 import { verifyAccess, getArticlePrice, getTotalReads } from "./stellar";
 import authRoutes from "./routes/authRoutes";
+import {
+  verifySessionToken,
+  getSecretKeyForSigning,
+  getWalletByEmail,
+} from "./services/custodialWalletService";
+import {
+  SorobanRpc,
+  Contract,
+  Networks,
+  TransactionBuilder,
+  BASE_FEE,
+  Keypair,
+  nativeToScVal,
+  Address,
+} from "@stellar/stellar-sdk";
 
 dotenv.config();
 
@@ -11,6 +27,10 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT ?? 3000;
+const RPC_URL =
+  process.env.STELLAR_RPC_URL ?? "https://soroban-testnet.stellar.org";
+const CONTRACT_ID = process.env.CONTRACT_ID ?? "";
+const NETWORK_PASSPHRASE = Networks.TESTNET;
 
 // In-memory read log (replace with Postgres in Phase 2 pilot)
 interface ReadRecord {
@@ -195,6 +215,123 @@ app.get("/contract", (_req, res) => {
     network: "testnet",
     explorerUrl: `https://stellar.expert/explorer/testnet/contract/${process.env.CONTRACT_ID}`,
   });
+});
+
+/**
+ * POST /purchase
+ * Purchase access for a custodial wallet user.
+ * Requires Bearer token (session token) in Authorization header.
+ */
+app.post("/purchase", async (req: Request, res: Response) => {
+  try {
+    const sessionToken = req.headers.authorization?.replace("Bearer ", "");
+    const { articleId, walletAddress } = req.body;
+
+    if (!sessionToken) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    if (!articleId || !walletAddress) {
+      return res
+        .status(400)
+        .json({ error: "articleId and walletAddress required" });
+    }
+
+    // Verify session
+    const auth = await verifySessionToken(sessionToken);
+    if (!auth) {
+      return res.status(401).json({ error: "Session expired" });
+    }
+
+    // Verify the wallet belongs to this user
+    const wallet = await getWalletByEmail(auth.email);
+    if (!wallet || wallet.publicKey !== walletAddress) {
+      return res.status(403).json({ error: "Wallet does not belong to user" });
+    }
+
+    // Get the secret key for signing
+    const secretKey = await getSecretKeyForSigning(auth.email);
+    const keypair = Keypair.fromSecret(secretKey);
+
+    // Build and sign the purchase transaction
+    const rpc = new SorobanRpc.Server(RPC_URL, { allowHttp: false });
+    const contract = new Contract(CONTRACT_ID);
+
+    const account = await rpc.getAccount(walletAddress);
+
+    const tx = new TransactionBuilder(account, {
+      fee: BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(
+        contract.call(
+          "purchase_access",
+          new Address(walletAddress).toScVal(),
+          nativeToScVal(articleId, { type: "string" }),
+        ),
+      )
+      .setTimeout(30)
+      .build();
+
+    // Simulate the transaction
+    const simResult = await rpc.simulateTransaction(tx);
+    if (SorobanRpc.Api.isSimulationError(simResult)) {
+      return res.status(400).json({
+        error: "Purchase simulation failed",
+        details: simResult.error,
+      });
+    }
+
+    // Assemble and sign
+    const preparedTx = SorobanRpc.assembleTransaction(
+      tx,
+      simResult as SorobanRpc.Api.SimulateTransactionSuccessResponse,
+    ).build();
+
+    preparedTx.sign(keypair);
+
+    // Send transaction
+    const sendResult = await rpc.sendTransaction(preparedTx);
+
+    if (sendResult.status === "ERROR") {
+      return res.status(400).json({
+        error: "Transaction submission failed",
+        details: sendResult.errorResult,
+      });
+    }
+
+    // Poll for confirmation
+    let getResult = await rpc.getTransaction(sendResult.hash);
+    let attempts = 0;
+    while (
+      getResult.status === SorobanRpc.Api.GetTransactionStatus.NOT_FOUND &&
+      attempts < 12
+    ) {
+      await new Promise((r) => setTimeout(r, 1000));
+      getResult = await rpc.getTransaction(sendResult.hash);
+      attempts++;
+    }
+
+    if (getResult.status === SorobanRpc.Api.GetTransactionStatus.SUCCESS) {
+      res.json({
+        success: true,
+        txHash: sendResult.hash,
+        message: "Purchase successful",
+      });
+    } else {
+      res.status(500).json({
+        error: "Transaction did not confirm",
+        status: getResult.status,
+      });
+    }
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    console.error("Purchase error:", err.message);
+    res.status(500).json({
+      error: "Purchase failed",
+      details: err.message,
+    });
+  }
 });
 
 // ── Auth Routes ─────────────────────────────────────────────────────
