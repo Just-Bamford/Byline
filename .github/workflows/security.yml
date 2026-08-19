@@ -25,8 +25,12 @@ jobs:
         run: npm ci
         working-directory: ./publisher-backend
 
-      - name: Check backend vulnerabilities
-        run: npm audit --omit=dev || true
+      - name: Check backend vulnerabilities (production dependencies)
+        run: npm audit --production --audit-level=moderate || true
+        working-directory: ./publisher-backend
+
+      - name: Check backend build-time vulnerabilities (informational)
+        run: npm audit || true
         working-directory: ./publisher-backend
 
       - name: Install frontend dependencies
