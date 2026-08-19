@@ -45,6 +45,12 @@ jobs:
         run: npm run build
         working-directory: ./publisher-backend
 
+      - name: Run tests (67 total: 35 endpoint + 32 existing)
+        run: npm run test:run
+        working-directory: ./publisher-backend
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/byline_test
+
   test-frontend:
     name: Test Frontend (React)
     runs-on: ubuntu-latest
@@ -101,8 +107,8 @@ jobs:
         run: cargo build --target wasm32-unknown-unknown --release
         working-directory: ./contract
 
-      - name: Run tests
-        run: cargo test
+      - name: Run tests (31 E2E integration tests)
+        run: cargo test --lib --quiet
         working-directory: ./contract
 
   test-sdk:

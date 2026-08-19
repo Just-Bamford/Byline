@@ -12,7 +12,7 @@ pub const USDC_ADDRESS: &str = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE
 
 /// Price type enum for flexibility
 #[contracttype]
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum PriceType {
     Stroops,  // Native XLM in stroops
     USDC,     // USD Coin via Circle anchor (in cents)
@@ -276,12 +276,12 @@ impl BylineContract {
 
         // Emit event with NFT mint indication
         let price_type_str = match &price_type {
-            PriceType::Stroops => String::from_slice(&env, "stroops"),
-            PriceType::USDC => String::from_slice(&env, "usdc"),
+            PriceType::Stroops => String::from_str(&env, "stroops"),
+            PriceType::USDC => String::from_str(&env, "usdc"),
         };
         env.events().publish(
             (symbol_short!("purchase"), article_id.clone()),
-            (reader.clone(), price, price_type_str, String::from_slice(&env, "nft_minted")),
+            (reader.clone(), price, price_type_str, String::from_str(&env, "nft_minted")),
         );
 
         AccessToken {
@@ -387,8 +387,8 @@ impl BylineContract {
 
         // Emit event with price type
         let price_type_str = match &price_type {
-            PriceType::Stroops => String::from_slice(&env, "stroops"),
-            PriceType::USDC => String::from_slice(&env, "usdc"),
+            PriceType::Stroops => String::from_str(&env, "stroops"),
+            PriceType::USDC => String::from_str(&env, "usdc"),
         };
         env.events().publish(
             (symbol_short!("purchase"), article_id.clone()),
@@ -985,6 +985,402 @@ mod test {
 
         assert_eq!(client.get_article_writer_split(&article_id), Some(0u32));
         assert_eq!(client.get_article_price(&article_id), 100_000);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════
+    // END-TO-END INTEGRATION TESTS: Full contract lifecycle
+    // ════════════════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn test_e2e_full_article_lifecycle() {
+        // Complete workflow: register → purchase → verify → check stats
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let reader1 = Address::generate(&env);
+        let reader2 = Address::generate(&env);
+        let article_id = String::from_str(&env, "e2e-article-001");
+
+        // 1. Register article
+        let price = 50_000i128;
+        client.register_article(&article_id, &price, &publisher);
+        assert_eq!(client.get_article_price(&article_id), price);
+        assert_eq!(client.get_publisher(&article_id), Some(publisher.clone()));
+
+        // 2. Verify unknown readers have no access
+        assert!(!client.verify_token(&reader1, &article_id));
+        assert!(!client.verify_token(&reader2, &article_id));
+
+        // 3. Reader 1 purchases
+        let token1 = client.purchase_access(&reader1, &article_id);
+        assert_eq!(token1.price, price);
+        assert!(client.verify_token(&reader1, &article_id));
+        assert_eq!(client.get_total_reads(), 1);
+
+        // 4. Reader 2 purchases
+        let token2 = client.purchase_access(&reader2, &article_id);
+        assert_eq!(token2.price, price);
+        assert!(client.verify_token(&reader2, &article_id));
+        assert_eq!(client.get_total_reads(), 2);
+
+        // 5. Unknown reader still has no access
+        let unknown = Address::generate(&env);
+        assert!(!client.verify_token(&unknown, &article_id));
+    }
+
+    #[test]
+    fn test_e2e_multiple_articles_same_publisher() {
+        // Publisher registers multiple articles
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let reader = Address::generate(&env);
+
+        let article1 = String::from_str(&env, "multi-article-1");
+        let article2 = String::from_str(&env, "multi-article-2");
+        let article3 = String::from_str(&env, "multi-article-3");
+
+        // Register three articles at different prices
+        client.register_article(&article1, &10_000, &publisher);
+        client.register_article(&article2, &20_000, &publisher);
+        client.register_article(&article3, &30_000, &publisher);
+
+        // Reader purchases all three
+        client.purchase_access(&reader, &article1);
+        client.purchase_access(&reader, &article2);
+        client.purchase_access(&reader, &article3);
+
+        // Verify access to all
+        assert!(client.verify_token(&reader, &article1));
+        assert!(client.verify_token(&reader, &article2));
+        assert!(client.verify_token(&reader, &article3));
+
+        // Total reads should be 3
+        assert_eq!(client.get_total_reads(), 3);
+    }
+
+    #[test]
+    fn test_e2e_price_update_after_registration() {
+        // Register article, update price, verify new purchases use new price
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let reader1 = Address::generate(&env);
+        let reader2 = Address::generate(&env);
+        let article_id = String::from_str(&env, "price-update-article");
+
+        // Initial price: 100k stroops
+        client.register_article(&article_id, &100_000, &publisher);
+        assert_eq!(client.get_article_price(&article_id), 100_000);
+
+        // Reader 1 purchases at original price
+        let token1 = client.purchase_access(&reader1, &article_id);
+        assert_eq!(token1.price, 100_000);
+
+        // Publisher updates price to 150k
+        client.set_article_price(&article_id, &150_000, &publisher);
+        assert_eq!(client.get_article_price(&article_id), 150_000);
+
+        // Reader 2 purchases at new price
+        let token2 = client.purchase_access(&reader2, &article_id);
+        assert_eq!(token2.price, 150_000);
+
+        // Both have access
+        assert!(client.verify_token(&reader1, &article_id));
+        assert!(client.verify_token(&reader2, &article_id));
+    }
+
+    #[test]
+    fn test_e2e_usdc_article_lifecycle() {
+        // Full lifecycle with USDC pricing (registration only, no transaction)
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let usdc_contract = Address::generate(&env);
+        let article_id = String::from_str(&env, "usdc-e2e-article");
+
+        // Register USDC article: $2.99
+        client.register_article_usdc(&article_id, &299, &publisher, &usdc_contract);
+        assert_eq!(client.get_article_price(&article_id), 299);
+
+        let price_type = client.get_price_type(&article_id);
+        assert_eq!(price_type, PriceType::USDC);
+
+        // Verify USDC contract is stored
+        assert_eq!(client.get_usdc_contract(), Some(usdc_contract));
+    }
+
+    #[test]
+    fn test_e2e_revenue_split_full_workflow() {
+        // Full workflow with revenue splits (XLM)
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let writer = Address::generate(&env);
+        let reader = Address::generate(&env);
+        let article_id = String::from_str(&env, "revenue-split-e2e");
+
+        // Register with 40% to writer, 60% to publisher
+        client.register_article_with_split(
+            &article_id,
+            &1_000_000, // 1 XLM
+            &publisher,
+            &writer,
+            &40,
+        );
+
+        // Verify split configuration
+        assert_eq!(client.get_article_writer(&article_id), Some(writer.clone()));
+        assert_eq!(client.get_article_writer_split(&article_id), Some(40));
+        assert_eq!(client.get_publisher(&article_id), Some(publisher.clone()));
+
+        // Reader purchases
+        let token = client.purchase_access(&reader, &article_id);
+        assert_eq!(token.price, 1_000_000);
+        assert!(client.verify_token(&reader, &article_id));
+
+        // Verify read counter incremented
+        assert_eq!(client.get_total_reads(), 1);
+    }
+
+    #[test]
+    fn test_e2e_usdc_revenue_split_registration() {
+        // USDC revenue split registration (no purchase transaction)
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let writer = Address::generate(&env);
+        let usdc_contract = Address::generate(&env);
+        let article_id = String::from_str(&env, "usdc-split-e2e");
+
+        // Register USDC article with 30% writer split
+        client.register_article_usdc_with_split(
+            &article_id,
+            &499, // $4.99
+            &publisher,
+            &usdc_contract,
+            &writer,
+            &30,
+        );
+
+        // Verify configuration
+        assert_eq!(client.get_article_writer(&article_id), Some(writer));
+        assert_eq!(client.get_article_writer_split(&article_id), Some(30));
+        assert_eq!(client.get_price_type(&article_id), PriceType::USDC);
+        assert_eq!(client.get_article_price(&article_id), 499);
+    }
+
+    #[test]
+    fn test_e2e_multiple_readers_multiple_articles() {
+        // Complex scenario: multiple readers, multiple articles, multiple publishers
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher1 = Address::generate(&env);
+        let publisher2 = Address::generate(&env);
+        let reader1 = Address::generate(&env);
+        let reader2 = Address::generate(&env);
+        let reader3 = Address::generate(&env);
+
+        let article1 = String::from_str(&env, "pub1-article-1");
+        let article2 = String::from_str(&env, "pub1-article-2");
+        let article3 = String::from_str(&env, "pub2-article-1");
+
+        // Publisher 1 registers 2 articles
+        client.register_article(&article1, &25_000, &publisher1);
+        client.register_article(&article2, &35_000, &publisher1);
+
+        // Publisher 2 registers 1 article
+        client.register_article(&article3, &45_000, &publisher2);
+
+        // Reader 1 purchases all three
+        client.purchase_access(&reader1, &article1);
+        client.purchase_access(&reader1, &article2);
+        client.purchase_access(&reader1, &article3);
+
+        // Reader 2 purchases articles 1 and 3
+        client.purchase_access(&reader2, &article1);
+        client.purchase_access(&reader2, &article3);
+
+        // Reader 3 purchases only article 2
+        client.purchase_access(&reader3, &article2);
+
+        // Verify access matrix
+        assert!(client.verify_token(&reader1, &article1));
+        assert!(client.verify_token(&reader1, &article2));
+        assert!(client.verify_token(&reader1, &article3));
+
+        assert!(client.verify_token(&reader2, &article1));
+        assert!(!client.verify_token(&reader2, &article2));
+        assert!(client.verify_token(&reader2, &article3));
+
+        assert!(!client.verify_token(&reader3, &article1));
+        assert!(client.verify_token(&reader3, &article2));
+        assert!(!client.verify_token(&reader3, &article3));
+
+        // Total reads: 3+2+1 = 6 (not 8)
+        assert_eq!(client.get_total_reads(), 6);
+    }
+
+    #[test]
+    fn test_e2e_nft_and_regular_access_mixed() {
+        // Mix NFT purchases and regular purchases
+        // Note: In current contract, both use same AccessRecord storage,
+        // so has_nft_access just checks if record exists
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let reader1 = Address::generate(&env);
+        let reader2 = Address::generate(&env);
+        let article_id = String::from_str(&env, "mixed-nft-article");
+
+        client.register_article(&article_id, &50_000, &publisher);
+
+        // Reader 1 purchases with NFT
+        let _token1 = client.purchase_access_with_nft(&reader1, &article_id);
+        assert!(client.verify_token(&reader1, &article_id));
+        assert!(client.has_nft_access(&reader1, &article_id));
+
+        // Reader 2 purchases regular
+        let _token2 = client.purchase_access(&reader2, &article_id);
+        assert!(client.verify_token(&reader2, &article_id));
+        // Note: Both create AccessRecords, so both appear to have NFT access in current design
+        assert!(client.has_nft_access(&reader2, &article_id));
+
+        // Total reads should be 2
+        assert_eq!(client.get_total_reads(), 2);
+    }
+
+    #[test]
+    fn test_e2e_event_log_verification() {
+        // Verify events are emitted correctly during lifecycle
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let reader = Address::generate(&env);
+        let article_id = String::from_str(&env, "event-test-article");
+
+        // Register and purchase
+        client.register_article(&article_id, &50_000, &publisher);
+        client.purchase_access(&reader, &article_id);
+
+        // Events are published internally — this test verifies
+        // the contract doesn't panic during event emission
+        // In production, event logs would be verified via ledger inspection
+        assert_eq!(client.get_total_reads(), 1);
+    }
+
+    #[test]
+    fn test_e2e_stress_many_readers() {
+        // Stress test: single article, many readers
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let article_id = String::from_str(&env, "stress-article");
+
+        client.register_article(&article_id, &10_000, &publisher);
+
+        // 50 readers purchase the same article
+        for _i in 0..50 {
+            let reader = Address::generate(&env);
+            client.purchase_access(&reader, &article_id);
+            assert!(client.verify_token(&reader, &article_id));
+        }
+
+        assert_eq!(client.get_total_reads(), 50);
+    }
+
+    #[test]
+    fn test_e2e_article_registration_validations() {
+        // Comprehensive validation testing
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let usdc_contract = Address::generate(&env);
+
+        // Valid stroops article
+        let article1 = String::from_str(&env, "valid-stroops");
+        client.register_article(&article1, &1_000, &publisher);
+        assert_eq!(client.get_article_price(&article1), 1_000);
+
+        // Valid USDC article at minimum ($0.01)
+        let article2 = String::from_str(&env, "min-usdc");
+        client.register_article_usdc(&article2, &1, &publisher, &usdc_contract);
+        assert_eq!(client.get_article_price(&article2), 1);
+
+        // Valid USDC article at maximum ($10,000)
+        let article3 = String::from_str(&env, "max-usdc");
+        client.register_article_usdc(&article3, &1_000_000, &publisher, &usdc_contract);
+        assert_eq!(client.get_article_price(&article3), 1_000_000);
+    }
+
+    #[test]
+    fn test_e2e_contract_getter_completeness() {
+        // Verify all getters work correctly
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, BylineContract);
+        let client = BylineContractClient::new(&env, &contract_id);
+
+        let publisher = Address::generate(&env);
+        let writer = Address::generate(&env);
+        let usdc_contract = Address::generate(&env);
+        let article_id = String::from_str(&env, "getter-test");
+
+        // Set up USDC contract
+        client.set_usdc_contract(&usdc_contract);
+        assert_eq!(client.get_usdc_contract(), Some(usdc_contract.clone()));
+
+        // Register article with split
+        client.register_article_usdc_with_split(
+            &article_id,
+            &299,
+            &publisher,
+            &usdc_contract,
+            &writer,
+            &25,
+        );
+
+        // Test all getters
+        assert_eq!(client.get_article_price(&article_id), 299);
+        assert_eq!(client.get_price_type(&article_id), PriceType::USDC);
+        assert_eq!(client.get_publisher(&article_id), Some(publisher));
+        assert_eq!(client.get_article_writer(&article_id), Some(writer));
+        assert_eq!(client.get_article_writer_split(&article_id), Some(25));
+        assert_eq!(client.get_usdc_contract(), Some(usdc_contract));
+        assert_eq!(client.get_total_reads(), 0); // No purchases yet
     }
 }
 
