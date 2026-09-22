@@ -1,10 +1,16 @@
 name: Build Docker Images
 
+# PAUSED: Disabled for development
+# Re-enable by uncommenting the 'on' section below
+#on:
+#  push:
+#    branches: [main]
+#  pull_request:
+#    branches: [main]
+
+# Placeholder to keep workflow file valid
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build-backend:
